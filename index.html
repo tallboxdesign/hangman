@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Hangman Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; }
+        #game-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 100;
+            color: #333;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            max-width: 400px;
+        }
+        #word-display {
+            font-size: 28px;
+            letter-spacing: 8px;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            min-height: 40px;
+        }
+        #used-letters { margin: 10px 0; font-family: 'Courier New', monospace; }
+        #letters-container {
+            margin: 15px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .letter-button {
+            padding: 10px 14px;
+            margin: 4px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .letter-button:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+        .letter-button.disabled {
+            background: #ddd;
+            cursor: not-allowed;
+            opacity: 0.7;
+            transform: none;
+        }
+        .letter-button.correct {
+            background: #a3e4a3;
+        }
+        .letter-button.incorrect {
+            background: #e4a3a3;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        #status {
+            font-weight: bold;
+            margin: 15px 0;
+            text-align: center;
+            min-height: 24px;
+            color: #444;
+        }
+        #game-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+        #new-game-btn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        #new-game-btn:hover {
+            background: #3e8e41;
+        }
+        #difficulty-select {
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        h3 {
+            text-align: center;
+            margin-top: 0;
+            color: #333;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h3>3D Hangman Game</h3>
+        <div id="word-display"></div>
+        <div id="status"></div>
+        <div>Used letters: <span id="used-letters"></span></div>
+        <div id="letters-container"></div>
+        <div id="game-controls">
+            <button id="new-game-btn">New Game</button>
+            <select id="difficulty-select">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+        </div>
+    </div>
+
+    <script>
+    // Game variables
+    let scene, camera, renderer, controls;
+    let world; // Physics world
+    let currentWord = "";
+    let guessedLetters = [];
+    let wrongGuesses = 0;
+    let maxWrongGuesses = 6; // Default for easy, will change based on difficulty
+    let gameOver = false;
+    let animationFrameId;
+    let currentDifficulty = "easy";
+
+    // Body parts and game objects
+    let hangmanParts = [];
+    let hangmanPhysicsBodies = [];
+    let gallows = {
+        base: null,
+        pole: null,
+        beam: null,
+        support: null,
+        rope: null
+    };
+    let gallowsBodies = [];
+    let groundBody;
+
+    // Materials
+    const woodMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8B4513,
+        roughness: 0.8,
+        metalness: 0.2
+    });
+
+    const ropeMaterial = new THREE.MeshStandardMaterial({
+        color: 0xCCCC99,
+        roughness: 0.9,
+        metalness: 0.1
+    });
+
+    const skinMaterial = new THREE.MeshStandardMaterial({
+        color: 0xFFD6A5,
+        roughness: 0.5,
+        metalness: 0.1
+    });
+
+    const blueMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3366CC,
+        roughness: 0.7,
+        metalness: 0.1
+    });
+
+    const blackMaterial = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        roughness: 0.7,
+        metalness: 0.1
+    });
+
+    // Word lists by difficulty
+    const difficultyWords = {
+        easy: ["cat", "dog", "fish", "bird", "apple", "banana", "orange", "grape", "car", "bike", "sun", "moon", "star", "tree", "book", "hat", "ball", "cup", "pen", "toy"],
+        medium: ["computer", "keyboard", "monitor", "elephant", "giraffe", "strawberry", "pineapple", "watermelon", "chocolate", "mountain", "universe", "treasure", "journey", "adventure", "knowledge", "birthday", "festival", "vacation", "painting", "exercise"],
+        hard: ["encyclopedia", "photosynthesis", "extraordinary", "perpendicular", "revolutionary", "sophisticated", "philosophical", "constellation", "biodiversity", "quintessential", "entrepreneurship", "extraterrestrial", "multidisciplinary", "paleontologist", "thermodynamics", "cryptocurrency", "infrastructure", "parliamentary", "biotechnology", "anthropologist"]
+    };
+
+    // Initialize the game
+    function init() {
+        // Set up Three.js scene
+        setupScene();
+
+        // Set up physics world
+        setupPhysics();
+
+        // Add event listeners
+        document.getElementById('new-game-btn').addEventListener('click', startNewGame);
+        document.getElementById('difficulty-select').addEventListener('change', function() {
+            currentDifficulty = this.value;
+            startNewGame();
+        });
+
+        // Start a new game
+        startNewGame();
+
+        // Start animation loop
+        animate();
+    }
+
+    // Set up the Three.js scene
+    function setupScene() {
+        // Create scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+
+        // Create camera
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 10);
+
+        // Create renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 7);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 50;
+        directionalLight.shadow.camera.left = -10;
+        directionalLight.shadow.camera.right = 10;
+        directionalLight.shadow.camera.top = 10;
+        directionalLight.shadow.camera.bottom = -10;
+        scene.add(directionalLight);
+
+        // Add ground
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0x7CFC00,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -4.5;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Add controls
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 5;
+        controls.maxDistance = 20;
+        controls.maxPolarAngle = Math.PI / 2;
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize);
+    }
+
+    // Set up physics world
+    function setupPhysics() {
+        world = new CANNON.World();
+        world.gravity.set(0, -9.82, 0); // Earth gravity
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        // Create ground physics body
+        const groundShape = new CANNON.Plane();
+        groundBody = new CANNON.Body({
+            mass: 0, // Static body
+            shape: groundShape
+        });
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        groundBody.position.set(0, -4.5, 0);
+        world.addBody(groundBody);
+    }
+
+    // Create the gallows structure with physics
+    function createGallows() {
+        // Remove existing gallows if any
+        if (gallows.base) {
+            scene.remove(gallows.base);
+            scene.remove(gallows.pole);
+            scene.remove(gallows.beam);
+            scene.remove(gallows.support);
+            scene.remove(gallows.rope);
+
+            // Remove physics bodies
+            gallowsBodies.forEach(body => {
+                world.remove(body);
+            });
+            gallowsBodies = [];
+        }
+
+        // Base
+        const baseGeometry = new THREE.BoxGeometry(6, 0.8, 2);
+        gallows.base = new THREE.Mesh(baseGeometry, woodMaterial);
+        gallows.base.position.y = -4.1;
+        gallows.base.castShadow = true;
+        gallows.base.receiveShadow = true;
+        scene.add(gallows.base);
+
+        // Base physics
+        const baseShape = new CANNON.Box(new CANNON.Vec3(3, 0.4, 1));
+        const baseBody = new CANNON.Body({
+            mass: 0, // Static body
+            shape: baseShape
+        });
+        baseBody.position.set(0, -4.1, 0);
+        world.addBody(baseBody);
+        gallowsBodies.push(baseBody);
+
+        // Vertical pole
+        const poleGeometry = new THREE.BoxGeometry(0.8, 8, 0.8);
+        gallows.pole = new THREE.Mesh(poleGeometry, woodMaterial);
+        gallows.pole.position.set(-2.5, -0.1, 0);
+        gallows.pole.castShadow = true;
+        gallows.pole.receiveShadow = true;
+        scene.add(gallows.pole);
+
+        // Pole physics
+        const poleShape = new CANNON.Box(new CANNON.Vec3(0.4, 4, 0.4));
+        const poleBody = new CANNON.Body({
+            mass: 0, // Static body
+            shape: poleShape
+        });
+        poleBody.position.set(-2.5, -0.1, 0);
+        world.addBody(poleBody);
+        gallowsBodies.push(poleBody);
+
+        // Horizontal beam
+        const beamGeometry = new THREE.BoxGeometry(4, 0.8, 0.8);
+        gallows.beam = new THREE.Mesh(beamGeometry, woodMaterial);
+        gallows.beam.position.set(-0.5, 3.9, 0);
+        gallows.beam.castShadow = true;
+        gallows.beam.receiveShadow = true;
+        scene.add(gallows.beam);
+
+        // Beam physics
+        const beamShape = new CANNON.Box(new CANNON.Vec3(2, 0.4, 0.4));
+        const beamBody = new CANNON.Body({
+            mass: 0, // Static body
+            shape: beamShape
+        });
+        beamBody.position.set(-0.5, 3.9, 0);
+        world.addBody(beamBody);
+        gallowsBodies.push(beamBody);
+
+        // Support beam (diagonal)
+        const supportGeometry = new THREE.BoxGeometry(3.5, 0.6, 0.6);
+        gallows.support = new THREE.Mesh(supportGeometry, woodMaterial);
+        gallows.support.position.set(-1.5, 1.9, 0);
+        gallows.support.rotation.z = Math.PI / 4;
+        gallows.support.castShadow = true;
+        gallows.support.receiveShadow = true;
+        scene.add(gallows.support);
+
+        // Rope
+        const ropeGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8);
+        gallows.rope = new THREE.Mesh(ropeGeometry, ropeMaterial);
+        gallows.rope.position.set(1.5, 3.15, 0);
+        gallows.rope.castShadow = true;
+        scene.add(gallows.rope);
+    }
+
+    // Create hangman body parts based on the reference image
+    function createHangmanParts() {
+        // Clear existing parts
+        hangmanParts.forEach(part => {
+            scene.remove(part);
+        });
+        hangmanParts = [];
+
+        // Clear physics bodies
+        hangmanPhysicsBodies.forEach(body => {
+            world.remove(body);
+        });
+        hangmanPhysicsBodies = [];
+
+        // Create individual body parts instead of a single group
+
+        // 1. Head (sphere)
+        const headGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const head = new THREE.Mesh(headGeometry, skinMaterial);
+        head.position.set(1.5, 2.4, 0);
+        head.castShadow = true;
+        head.visible = false; // Start invisible
+        scene.add(head);
+        hangmanParts.push(head);
+
+        // Head physics (will be activated when game is lost)
+        const headShape = new CANNON.Sphere(0.5);
+        const headBody = new CANNON.Body({
+            mass: 5,
+            shape: headShape
+        });
+        headBody.position.set(1.5, 2.4, 0);
+        headBody.linearDamping = 0.1;
+        headBody.angularDamping = 0.1;
+        hangmanPhysicsBodies.push({mesh: head, body: headBody});
+
+        // 2. Body (blue torso - box)
+        const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 0.5);
+        const body = new THREE.Mesh(bodyGeometry, blueMaterial);
+        body.position.set(1.5, 1.15, 0);
+        body.castShadow = true;
+        body.visible = false; // Start invisible
+        scene.add(body);
+        hangmanParts.push(body);
+
+        // Body physics
+        const bodyShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.75, 0.25));
+        const bodyBody = new CANNON.Body({
+            mass: 10,
+            shape: bodyShape
+        });
+        bodyBody.position.set(1.5, 1.15, 0);
+        hangmanPhysicsBodies.push({mesh: body, body: bodyBody});
+
+        // 3. Left arm
+        const leftArmGeometry = new THREE.BoxGeometry(0.8, 0.3, 0.3);
+        const leftArm = new THREE.Mesh(leftArmGeometry, blueMaterial);
+        leftArm.position.set(0.6, 1.4, 0);
+        leftArm.castShadow = true;
+        leftArm.visible = false; // Start invisible
+        scene.add(leftArm);
+        hangmanParts.push(leftArm);
+
+        // Left arm physics
+        const leftArmShape = new CANNON.Box(new CANNON.Vec3(0.4, 0.15, 0.15));
+        const leftArmBody = new CANNON.Body({
+            mass: 2,
+            shape: leftArmShape
+        });
+        leftArmBody.position.set(0.6, 1.4, 0);
+        hangmanPhysicsBodies.push({mesh: leftArm, body: leftArmBody});
+
+        // 4. Right arm
+        const rightArmGeometry = new THREE.BoxGeometry(0.8, 0.3, 0.3);
+        const rightArm = new THREE.Mesh(rightArmGeometry, blueMaterial);
+        rightArm.position.set(2.4, 1.4, 0);
+        rightArm.castShadow = true;
+        rightArm.visible = false; // Start invisible
+        scene.add(rightArm);
+        hangmanParts.push(rightArm);
+
+        // Right arm physics
+        const rightArmShape = new CANNON.Box(new CANNON.Vec3(0.4, 0.15, 0.15));
+        const rightArmBody = new CANNON.Body({
+            mass: 2,
+            shape: rightArmShape
+        });
+        rightArmBody.position.set(2.4, 1.4, 0);
+        hangmanPhysicsBodies.push({mesh: rightArm, body: rightArmBody});
+
+        // 5. Left leg
+        const leftLegGeometry = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+        const leftLeg = new THREE.Mesh(leftLegGeometry, blackMaterial);
+        leftLeg.position.set(1.25, 0.1, 0);
+        leftLeg.castShadow = true;
+        leftLeg.visible = false; // Start invisible
+        scene.add(leftLeg);
+        hangmanParts.push(leftLeg);
+
+        // Left leg physics
+        const leftLegShape = new CANNON.Box(new CANNON.Vec3(0.15, 0.4, 0.15));
+        const leftLegBody = new CANNON.Body({
+            mass: 3,
+            shape: leftLegShape
+        });
+        leftLegBody.position.set(1.25, 0.1, 0);
+        hangmanPhysicsBodies.push({mesh: leftLeg, body: leftLegBody});
+
+        // 6. Right leg
+        const rightLegGeometry = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+        const rightLeg = new THREE.Mesh(rightLegGeometry, blackMaterial);
+        rightLeg.position.set(1.75, 0.1, 0);
+        rightLeg.castShadow = true;
+        rightLeg.visible = false; // Start invisible
+        scene.add(rightLeg);
+        hangmanParts.push(rightLeg);
+
+        // Right leg physics
+        const rightLegShape = new CANNON.Box(new CANNON.Vec3(0.15, 0.4, 0.15));
+        const rightLegBody = new CANNON.Body({
+            mass: 3,
+            shape: rightLegShape
+        });
+        rightLegBody.position.set(1.75, 0.1, 0);
+        hangmanPhysicsBodies.push({mesh: rightLeg, body: rightLegBody});
+
+        // For medium and hard difficulties, add more body parts
+        if (currentDifficulty === "medium" || currentDifficulty === "hard") {
+            // 7. Left foot
+            const leftFootGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+            const leftFoot = new THREE.Mesh(leftFootGeometry, blackMaterial);
+            leftFoot.position.set(1.15, -0.3, 0.1);
+            leftFoot.castShadow = true;
+            leftFoot.visible = false;
+            scene.add(leftFoot);
+            hangmanParts.push(leftFoot);
+
+            // Left foot physics
+            const leftFootShape = new CANNON.Box(new CANNON.Vec3(0.2, 0.1, 0.2));
+            const leftFootBody = new CANNON.Body({
+                mass: 1,
+                shape: leftFootShape
+            });
+            leftFootBody.position.set(1.15, -0.3, 0.1);
+            hangmanPhysicsBodies.push({mesh: leftFoot, body: leftFootBody});
+
+            // 8. Right foot
+            const rightFootGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+            const rightFoot = new THREE.Mesh(rightFootGeometry, blackMaterial);
+            rightFoot.position.set(1.85, -0.3, 0.1);
+            rightFoot.castShadow = true;
+            rightFoot.visible = false;
+            scene.add(rightFoot);
+            hangmanParts.push(rightFoot);
+
+            // Right foot physics
+            const rightFootShape = new CANNON.Box(new CANNON.Vec3(0.2, 0.1, 0.2));
+            const rightFootBody = new CANNON.Body({
+                mass: 1,
+                shape: rightFootShape
+            });
+            rightFootBody.position.set(1.85, -0.3, 0.1);
+            hangmanPhysicsBodies.push({mesh: rightFoot, body: rightFootBody});
+        }
+
+        if (currentDifficulty === "hard") {
+            // 9. Hat
+            const hatGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.3, 32);
+            const hat = new THREE.Mesh(hatGeometry, blackMaterial);
+            hat.position.set(1.5, 2.9, 0);
+            hat.castShadow = true;
+            hat.visible = false;
+            scene.add(hat);
+            hangmanParts.push(hat);
+
+            // Hat physics
+            const hatShape = new CANNON.Cylinder(0.4, 0.5, 0.3, 16);
+            const hatBody = new CANNON.Body({
+                mass: 1,
+                shape: hatShape
+            });
+            hatBody.position.set(1.5, 2.9, 0);
+            hangmanPhysicsBodies.push({mesh: hat, body: hatBody});
+
+            // 10. Nose
+            const noseGeometry = new THREE.ConeGeometry(0.1, 0.3, 16);
+            const nose = new THREE.Mesh(noseGeometry, skinMaterial);
+            nose.position.set(1.5, 2.4, 0.5);
+            nose.rotation.x = Math.PI / 2;
+            nose.castShadow = true;
+            nose.visible = false;
+            scene.add(nose);
+            hangmanParts.push(nose);
+
+            // Nose physics
+            const noseShape = new CANNON.Cylinder(0, 0.1, 0.3, 8);
+            const noseBody = new CANNON.Body({
+                mass: 0.5,
+                shape: noseShape
+            });
+            noseBody.position.set(1.5, 2.4, 0.5);
+            noseBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+            hangmanPhysicsBodies.push({mesh: nose, body: noseBody});
+        }
+    }
+
+    // Start a new game
+    function startNewGame() {
+        // Set max wrong guesses based on difficulty
+        if (currentDifficulty === "easy") {
+            maxWrongGuesses = 6;
+        } else if (currentDifficulty === "medium") {
+            maxWrongGuesses = 8;
+        } else if (currentDifficulty === "hard") {
+            maxWrongGuesses = 10;
+        }
+
+        const words = difficultyWords[currentDifficulty];
+        currentWord = words[Math.floor(Math.random() * words.length)].toUpperCase();
+
+        guessedLetters = [];
+        wrongGuesses = 0;
+        gameOver = false;
+
+        // Create gallows
+        createGallows();
+
+        // Create hangman parts but don't show them yet
+        createHangmanParts();
+
+        // Update UI
+        updateWordDisplay();
+        updateUsedLetters();
+        createLetterButtons();
+        updateStatus(`Game started on ${currentDifficulty} difficulty! Guess a letter.`);
+    }
+
+    // Update the word display with correctly guessed letters
+    function updateWordDisplay() {
+        const wordDisplay = document.getElementById('word-display');
+        wordDisplay.textContent = currentWord
+            .split('')
+            .map(letter => guessedLetters.includes(letter) ? letter : '_')
+            .join(' ');
+    }
+
+    // Update the used letters display
+    function updateUsedLetters() {
+        document.getElementById('used-letters').textContent = guessedLetters.join(', ');
+    }
+
+    // Create letter buttons for guessing
+    function createLetterButtons() {
+        const container = document.getElementById('letters-container');
+        container.innerHTML = '';
+
+        for (let i = 65; i <= 90; i++) {
+            const letter = String.fromCharCode(i);
+            const button = document.createElement('button');
+            button.textContent = letter;
+            button.className = 'letter-button';
+
+            if (guessedLetters.includes(letter)) {
+                button.disabled = true;
+                button.classList.add('disabled');
+
+                if (currentWord.includes(letter)) {
+                    button.classList.add('correct');
+                } else {
+                    button.classList.add('incorrect');
+                }
+            }
+
+            button.addEventListener('click', () => {
+                guessLetter(letter);
+            });
+
+            container.appendChild(button);
+        }
+    }
+
+    // Handle letter guessing
+    function guessLetter(letter) {
+        if (guessedLetters.includes(letter) || gameOver) return;
+
+        guessedLetters.push(letter);
+
+        if (currentWord.includes(letter)) {
+            updateStatus(`Good guess! '${letter}' is in the word.`);
+
+            // Check for win
+            const allLettersGuessed = currentWord.split('').every(char => guessedLetters.includes(char));
+            if (allLettersGuessed) {
+                updateStatus("Congratulations! You won!");
+                gameOver = true;
+                disableAllButtons();
+            }
+        } else {
+            wrongGuesses++;
+            updateStatus(`Wrong guess! '${letter}' is not in the word. ${maxWrongGuesses - wrongGuesses} chances left.`);
+
+            // Show next body part
+            if (wrongGuesses <= hangmanParts.length) {
+                hangmanParts[wrongGuesses - 1].visible = true;
+            }
+
+            // Check for loss
+            if (wrongGuesses >= maxWrongGuesses) {
+                updateStatus(`Game over! The word was "${currentWord}".`);
+                gameOver = true;
+                disableAllButtons();
+
+                // Activate physics for the hangman to fall
+                setTimeout(() => {
+                    activateHangmanPhysics();
+                }, 1000);
+            }
+        }
+
+        // Update UI
+        updateWordDisplay();
+        updateUsedLetters();
+        createLetterButtons();
+    }
+
+    // Activate physics for the hangman to fall
+    function activateHangmanPhysics() {
+        // Add all physics bodies to the world
+        hangmanPhysicsBodies.forEach(item => {
+            world.addBody(item.body);
+
+            // Add some initial velocity and rotation for more dramatic effect
+            item.body.velocity.set(
+                (Math.random() - 0.5) * 2, // Random X velocity
+                Math.random() * -2,         // Downward Y velocity
+                (Math.random() - 0.5) * 2   // Random Z velocity
+            );
+
+            item.body.angularVelocity.set(
+                Math.random() * 5,
+                Math.random() * 5,
+                Math.random() * 5
+            );
+        });
+
+        // Remove the rope
+        scene.remove(gallows.rope);
+    }
+
+    // Disable all letter buttons
+    function disableAllButtons() {
+        const buttons = document.querySelectorAll('.letter-button');
+        buttons.forEach(button => {
+            button.disabled = true;
+            button.classList.add('disabled');
+        });
+    }
+
+    // Update status message
+    function updateStatus(message) {
+        document.getElementById('status').textContent = message;
+    }
+
+    // Handle window resize
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // Animation loop
+    function animate() {
+        animationFrameId = requestAnimationFrame(animate);
+
+        // Step the physics world
+        world.step(1/60);
+
+        // Update mesh positions based on physics bodies
+        hangmanPhysicsBodies.forEach(item => {
+            if (item.body.world) { // Only update if body is in the physics world
+                item.mesh.position.copy(item.body.position);
+                item.mesh.quaternion.copy(item.body.quaternion);
+            }
+        });
+
+        // Update controls
+        controls.update();
+
+        // Render scene
+        renderer.render(scene, camera);
+    }
+
+    // Initialize the game when the page loads
+    window.addEventListener('load', init);
+    </script>
+</body>
+</html>
