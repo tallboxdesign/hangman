@@ -1,55 +1,97 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>3D Hangman Game - Gemini Word Gen (Improved Uniqueness)</title> <!-- Title updated -->
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Hangman Game</title>
+    <!-- Libraries loaded via CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
-        /* CSS remains the same as the previous version */
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: Arial, sans-serif; }
-        #game-container { position: absolute; top: 15px; left: 15px; background: rgba(255,255,255,0.85); padding: 15px; border-radius: 8px; z-index: 100; color: #333; box-shadow: 0 6px 12px rgba(0,0,0,0.25); max-width: 90%; width: 420px; box-sizing: border-box; user-select: none; }
+        /* Basic reset for iframe context */
+        body { 
+            margin: 0; 
+            overflow: hidden; /* Prevent scrollbars *inside* the iframe body */
+            background-color: #87CEEB; /* Match canvas background */
+            font-family: Arial, sans-serif; 
+        }
+        /* Canvas MUST fill the body */
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1; /* Behind the UI */
+        }
+
+        /* --- Game UI Container --- */
+        #game-container {
+            position: absolute; /* Position relative to iframe body */
+            top: 15px;
+            left: 15px;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100; /* Above canvas */
+            color: #333;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+            max-width: 400px;
+            width: 90%; /* Responsive within its layer */
+            user-select: none;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        #game-container * {
+             box-sizing: border-box;
+        }
+
+        /* --- Original UI Styles (apply directly here) --- */
         #game-container > *:not(#game-container-header) { user-select: auto; }
-        #game-container-header { cursor: move; } /* Add cursor for dragging */
-        #word-display { font-size: 26px; letter-spacing: 6px; margin-bottom: 15px; font-family: 'Courier New', monospace; text-align: center; min-height: 40px; word-break: break-all; line-height: 1.4; }
-        #status-container { display: flex; justify-content: center; align-items: center; margin: 15px 0 10px 0; min-height: 24px; flex-wrap: wrap; /* Allow wrap */ } /* Flex container for status */
+        #game-container-header { cursor: move; background-color: #e8e8e8; padding: 8px 15px; margin: -15px -15px 15px -15px; border-top-left-radius: 8px; border-top-right-radius: 8px; font-size: 16px; font-weight: bold; text-align: center; }
+        #word-display { font-size: 24px; letter-spacing: 5px; margin-bottom: 15px; font-family: 'Courier New', monospace; text-align: center; min-height: 35px; word-break: break-all; line-height: 1.3; }
+        #status-container { display: flex; justify-content: center; align-items: center; margin: 15px 0 10px 0; min-height: 24px; flex-wrap: wrap; }
         #status { font-weight: bold; text-align: center; color: #444; font-size: 15px; flex-grow: 1; padding-right: 5px; }
-        #word-source { font-size: 12px; font-style: italic; color: #666; text-align: center; flex-shrink: 0; width: 100%; /* Take full width on wrap */ margin-top: 2px; } /* Style for the source identifier */
+        #word-source { font-size: 12px; font-style: italic; color: #666; text-align: center; flex-shrink: 0; width: 100%; margin-top: 2px; }
         #used-letters-container { margin: 10px 0; font-family: 'Courier New', monospace; text-align: center; font-size: 14px; min-height: 20px; }
         #used-letters { font-weight: bold; color: #555; }
         #letters-container { margin: 15px 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
-        .letter-button { padding: 8px 12px; margin: 0; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #fff; font-weight: bold; transition: all 0.15s ease-in-out; min-width: 38px; text-align: center; }
+        .letter-button { padding: 8px 10px; margin: 0; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #fff; font-weight: bold; transition: all 0.15s ease-in-out; min-width: 35px; text-align: center; font-size: 14px; }
         .letter-button:hover:not(.disabled) { background: #e8f4ff; transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .letter-button.disabled { background: #e0e0e0; cursor: not-allowed; opacity: 0.6; transform: none; box-shadow: none; }
         .letter-button.correct { background: #b7e8b7; border-color: #8fbc8f; color: #1a5a1a; }
         .letter-button.incorrect { background: #f8c6c6; border-color: #d8a0a0; color: #8b0000; }
-        canvas { display: block; width: 100%; height: 100%; }
-        #game-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; gap: 10px; }
-        #new-game-btn { padding: 10px 18px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.3s; flex-shrink: 0; }
+        #game-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; gap: 10px; flex-wrap: wrap; }
+        #new-game-btn { padding: 10px 15px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.3s; flex-shrink: 0; font-size: 14px; }
         #new-game-btn:hover { background: #3e8e41; }
-        #difficulty-select { padding: 9px; border-radius: 4px; border: 1px solid #ccc; flex-grow: 1; min-width: 80px; }
-        h3 { text-align: center; margin-top: 0; margin-bottom: 10px; color: #333; font-family: Arial, sans-serif; }
+        #difficulty-select { padding: 9px; border-radius: 4px; border: 1px solid #ccc; flex-grow: 1; min-width: 150px; font-size: 14px; }
         #api-settings { margin-top: 20px; padding-top: 15px; border-top: 1px solid #ccc; }
+        #api-settings h4 { text-align: center; margin-bottom: 8px; font-size: 1.1em; }
         .api-input-container { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
-        #api-key-input { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; min-width: 150px; }
-        #api-model-select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        #api-key-input { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; min-width: 150px; font-size: 13px;}
+        #api-model-select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px;}
         #api-status { font-size: 13px; margin-top: 5px; min-height: 20px; font-style: italic; }
-        #api-controls { display: flex; gap: 10px; align-items: center; width: 100%; }
-        #api-controls label { display: flex; align-items: center; }
+        #api-controls { display: flex; gap: 10px; align-items: center; width: 100%; flex-wrap: wrap; }
+        #api-controls label { display: flex; align-items: center; font-size: 14px; }
         #use-api-checkbox { margin-right: 5px; transform: scale(1.1); }
         #test-api-btn { padding: 7px 12px; font-size: 13px; cursor: pointer; margin-left: auto; }
         #api-key-warning { font-size: 12px; color: #888; margin-top: 5px; }
-        @media (max-width: 480px) { #game-container { left: 50%; transform: translateX(-50%); top: 5px; max-width: 95%; padding: 10px; user-select: none; } #game-container-header { cursor: default; } h3 { font-size: 18px; } #word-display { font-size: 22px; letter-spacing: 4px; } .letter-button { padding: 10px 10px; min-width: 34px; font-size: 14px;} #game-controls { flex-wrap: wrap; } #difficulty-select { width: 100%; margin-top: 5px; } .api-input-container { flex-direction: column; align-items: stretch; } #api-controls { flex-wrap: wrap; } #test-api-btn { margin-left: 0; margin-top: 5px; } #status-container { text-align: center; } #status { padding-right: 0; text-align: center; width: 100%;} #word-source { text-align: center; width: 100%; margin-top: 2px; } }
+        /* Responsive Adjustments */
+        @media (max-width: 600px) { #game-container { left: 10px; top: 10px; max-width: calc(100% - 20px); width: calc(100% - 20px); padding: 10px; font-size: 13px; } #game-container-header { cursor: default; margin: -10px -10px 10px -10px; font-size: 15px; } #word-display { font-size: 18px; letter-spacing: 3px; min-height: 30px;} .letter-button { padding: 7px 8px; min-width: 30px; font-size: 13px;} #game-controls { flex-direction: column; align-items: stretch; } #difficulty-select { width: 100%; margin-top: 8px; font-size: 13px; } #new-game-btn { font-size: 14px; } #status { font-size: 14px; } .api-input-container { flex-direction: column; align-items: stretch; } #api-controls { justify-content: space-between; } #test-api-btn { margin-left: 0; margin-top: 5px; } #api-model-select { width: 100%; margin-top: 5px;} #api-key-input { width: 100%; } }
+        @media (max-width: 420px) { .letter-button { min-width: 26px; padding: 6px; font-size: 12px; gap: 3px;} #word-display { font-size: 16px; letter-spacing: 2px;} #game-container { left: 5px; top: 5px; width: calc(100% - 10px); } }
     </style>
 </head>
 <body>
-     <!-- HTML structure remains the same -->
-     <div id="game-container">
+    <!-- Canvas will be added here by Three.js, UI sits on top -->
+
+    <!-- Game UI HTML -->
+    <div id="game-container">
         <h3 id="game-container-header">3D Hangman Game</h3>
         <div id="word-display"></div>
         <div id="status-container">
-            <span id="status">Loading...</span>
+            <span id="status">Loading Game...</span>
             <span id="word-source"></span>
         </div>
         <div id="used-letters-container">Used letters: <span id="used-letters"></span></div>
@@ -58,7 +100,7 @@
             <button id="new-game-btn">New Game</button>
             <select id="difficulty-select">
                 <option value="easy">Easy (6 guesses)</option>
-                <option value="medium">Medium (8 guesses)</option>
+                <option value="medium" selected>Medium (8 guesses)</option>
                 <option value="hard">Hard (10 guesses)</option>
             </select>
         </div>
@@ -79,250 +121,137 @@
              </div>
              <div id="api-status">Enter key and click Test/Save.</div>
          </div>
-     </div>
+    </div>
 
     <script>
-    // --- Configuration --- (Same)
-    const HANGMAN_PART_COUNT = { easy: 6, medium: 8, hard: 10 }; const DEFAULT_WORDS = { easy: ["SKY", "PIE", "CAT", "DOG", "SUN", "RUN", "BALL", "TREE", "BOOK", "CUP", "FISH", "SHIP", "FROG", "DUCK", "MILK", "STAR", "HAT", "KEY", "LAMP", "NOTE", "APPLE"], medium: ["COMPUTER", "KEYBOARD", "MONITOR", "ELEPHANT", "GIRAFFE", "STRAWBERRY", "PINEAPPLE", "WATERMELON", "CHOCOLATE", "MOUNTAIN", "UNIVERSE", "TREASURE", "JOURNEY", "ADVENTURE", "KNOWLEDGE", "BIRTHDAY", "FESTIVAL", "VACATION", "PAINTING", "EXERCISE", "BEACH", "BRAIN", "CHAIR", "DANCE", "EARTH", "FLUTE", "GHOST", "HOTEL", "JUICE", "LEMON", "MOUSE", "NORTH", "OCEAN", "PANDA", "QUEEN", "ROBOT", "SNAKE", "TIGER", "UMBRELLA", "VOICE", "WATCH", "XYLOPHONE", "YACHT", "ZEBRA"], hard: ["ENCYCLOPEDIA", "PHOTOSYNTHESIS", "EXTRAORDINARY", "PERPENDICULAR", "REVOLUTIONARY", "SOPHISTICATED", "PHILOSOPHICAL", "CONSTELLATION", "BIODIVERSITY", "QUINTESSENTIAL", "ENTREPRENEURSHIP", "EXTRATERRESTRIAL", "MULTIDISCIPLINARY", "PALEONTOLOGIST", "THERMODYNAMICS", "CRYPTOCURRENCY", "INFRASTRUCTURE", "PARLIAMENTARY", "BIOTECHNOLOGY", "ANTHROPOLOGIST", "ADVENTURE", "BICYCLE", "CHAMPION", "DINOSAUR", "FIREWORKS", "HELICOPTER", "INTERNET", "JELLYFISH", "KANGAROO", "LIGHTHOUSE", "MAGNIFY", "NEIGHBOR", "ORCHESTRA", "PENGUIN", "QUICKSAND", "RAINBOW", "SPACESHIP", "TELESCOPE", "UNICORN", "VOLCANO", "WATERFALL", "YESTERDAY", "ZODIAC"] }; const FACE_CHANGE_GUESS_OFFSET = 1;
+        // Wrapper to wait for Libraries (more robust than just DOMContentLoaded)
+        function waitForLibraries(callback) {
+            const maxAttempts = 20; let attempts = 0;
+            function check() {
+                attempts++; console.log(`[Lib Waiter] Attempt ${attempts} to check libraries...`);
+                if (typeof THREE !== 'undefined' && typeof CANNON !== 'undefined' && typeof THREE.OrbitControls !== 'undefined') {
+                    console.log("[Lib Waiter] Libraries loaded! Proceeding."); callback(); 
+                } else if (attempts >= maxAttempts) {
+                    console.error("[Lib Waiter] Libraries did not load after multiple attempts."); const statusEl = document.getElementById('status'); if (statusEl) statusEl.textContent = "Error: Required JavaScript libraries failed to load."; if (typeof THREE === 'undefined') console.error("[Lib Waiter] THREE is missing."); if (typeof CANNON === 'undefined') console.error("[Lib Waiter] CANNON is missing."); if (typeof THREE.OrbitControls === 'undefined') console.error("[Lib Waiter] THREE.OrbitControls is missing.");
+                } else { setTimeout(check, 500); }
+            } check(); 
+        }
 
-    // --- Game State --- (Same)
-    let scene, camera, renderer, controls; let world;
-    let currentWord = ""; let guessedLetters = []; let wrongGuesses = 0;
-    let maxWrongGuesses = 6; let gameOver = false; let animationFrameId;
-    let currentDifficulty = "easy"; let isMobile = false;
-    let statusMessage = "Loading...";
-    let wordSource = "";
+        // Use simple 'load' event listener for iframe context
+         window.addEventListener('load', function() {
+            console.log("[Iframe] Window loaded. Waiting for libraries...");
+             waitForLibraries(initHangmanGame); 
+         });
 
-    // --- API State --- (Added tracking for previous words)
-    let apiKey = localStorage.getItem('hangmanApiKey') || '';
-    let apiModel = localStorage.getItem('hangmanApiModel') || 'gemini-1.5-flash';
-    let useApiForWords = localStorage.getItem('hangmanUseApi') === 'true';
-    let isApiWorking = false;
-    // *** ADDED based on your solution approach ***
-    let previousApiWords = []; // Store words previously returned by the API
-    const MAX_STORED_WORDS = 20; // Limit how many we remember to avoid memory issues
+        // =============================================
+        // FULL HANGMAN GAME CODE
+        // =============================================
+        function initHangmanGame() {
+            console.log("Hangman WP Iframe: initHangmanGame() called."); // Added Iframe tag
 
-    // --- 3D Objects --- (Same)
-    let hangmanParts = []; let hangmanPhysicsBodies = []; let gallows = { base: null, pole: null, beam: null, support: null, rope: null }; let gallowsBodies = []; let groundBody; let smileFaceGroup = null; let grumpyFaceGroup = null; let headMainSphere = null;
+            // --- Configuration & State ---
+            const HANGMAN_PART_COUNT = { easy: 6, medium: 8, hard: 10 }; const DEFAULT_WORDS = { easy: ["SKY", "PIE", "CAT", "DOG", "SUN", "RUN", "BALL", "TREE", "BOOK", "CUP", "FISH", "SHIP", "FROG", "DUCK", "MILK", "STAR", "HAT", "KEY", "LAMP", "NOTE", "APPLE"], medium: ["COMPUTER", "KEYBOARD", "MONITOR", "ELEPHANT", "GIRAFFE", "STRAWBERRY", "PINEAPPLE", "WATERMELON", "CHOCOLATE", "MOUNTAIN", "UNIVERSE", "TREASURE", "JOURNEY", "ADVENTURE", "KNOWLEDGE", "BIRTHDAY", "FESTIVAL", "VACATION", "PAINTING", "EXERCISE", "BEACH", "BRAIN", "CHAIR", "DANCE", "EARTH", "FLUTE", "GHOST", "HOTEL", "JUICE", "LEMON", "MOUSE", "NORTH", "OCEAN", "PANDA", "QUEEN", "ROBOT", "SNAKE", "TIGER", "UMBRELLA", "VOICE", "WATCH", "XYLOPHONE", "YACHT", "ZEBRA"], hard: ["ENCYCLOPEDIA", "PHOTOSYNTHESIS", "EXTRAORDINARY", "PERPENDICULAR", "REVOLUTIONARY", "SOPHISTICATED", "PHILOSOPHICAL", "CONSTELLATION", "BIODIVERSITY", "QUINTESSENTIAL", "ENTREPRENEURSHIP", "EXTRATERRESTRIAL", "MULTIDISCIPLINARY", "PALEONTOLOGIST", "THERMODYNAMICS", "CRYPTOCURRENCY", "INFRASTRUCTURE", "PARLIAMENTARY", "BIOTECHNOLOGY", "ANTHROPOLOGIST", "ADVENTURE", "BICYCLE", "CHAMPION", "DINOSAUR", "FIREWORKS", "HELICOPTER", "INTERNET", "JELLYFISH", "KANGAROO", "LIGHTHOUSE", "MAGNIFY", "NEIGHBOR", "ORCHESTRA", "PENGUIN", "QUICKSAND", "RAINBOW", "SPACESHIP", "TELESCOPE", "UNICORN", "VOLCANO", "WATERFALL", "YESTERDAY", "ZODIAC"] }; const FACE_CHANGE_GUESS_OFFSET = 1;
+            let scene, camera, renderer, controls; let world;
+            let currentWord = ""; let guessedLetters = []; let wrongGuesses = 0;
+            let maxWrongGuesses = 8; let gameOver = false; let animationFrameId;
+            let currentDifficulty = "medium"; let isMobile = false;
+            let statusMessage = "Loading..."; let wordSource = "";
+            /* Removed wrapper elements - not needed in iframe context */
+            // let gameWrapperElement, canvasContainerElement, gameContainerElement;
+            let gameContainerElement; // Only need the UI panel reference
+            let apiKey = localStorage.getItem('hangmanApiKey') || ''; let apiModel = localStorage.getItem('hangmanApiModel') || 'gemini-1.5-flash'; let useApiForWords = localStorage.getItem('hangmanUseApi') === 'true'; let isApiWorking = false;
+            let previousApiWords = []; const MAX_STORED_WORDS = 20;
+            let hangmanParts = []; let hangmanPhysicsBodies = []; let gallows = { base: null, pole: null, beam: null, support: null, rope: null }; let gallowsBodies = []; let groundBody; let smileFaceGroup = null; grumpyFaceGroup = null; headMainSphere = null;
+            const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8, metalness: 0.2 }); const ropeMaterial = new THREE.MeshStandardMaterial({ color: 0xBDA580, roughness: 0.9, metalness: 0.1 }); const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xFFDAB9, roughness: 0.6, metalness: 0.1 }); const blueMaterial = new THREE.MeshStandardMaterial({ color: 0x4682B4, roughness: 0.7, metalness: 0.1 }); const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7, metalness: 0.1 }); const faceDetailMaterial = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
 
-    // --- Materials --- (Same)
-    const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8, metalness: 0.2 }); const ropeMaterial = new THREE.MeshStandardMaterial({ color: 0xBDA580, roughness: 0.9, metalness: 0.1 }); const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xFFDAB9, roughness: 0.6, metalness: 0.1 }); const blueMaterial = new THREE.MeshStandardMaterial({ color: 0x4682B4, roughness: 0.7, metalness: 0.1 }); const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7, metalness: 0.1 }); const faceDetailMaterial = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
-
-    // --- Initialization --- (Same)
-    function init() { /* ... */ }
-
-    // --- Draggable Element Logic --- (Same)
-    function makeDraggable(elmnt, header) { /* ... */ }
-
-    // --- UI Setup and Event Listeners --- (Same)
-    function initUI() { /* ... */ }
-
-    // --- Scene Setup (Three.js) --- (Same)
-    function setupScene() { /* ... */ }
-
-    // --- Physics Setup (Cannon.js) --- (Same)
-    function setupPhysics() { /* ... */ }
-
-    // --- Gallows Creation --- (Same)
-    function createGallows() { /* ... */ }
-
-    // --- Hangman Creation --- (Same)
-    function createHangmanParts() { /* ... */ }
-
-    // --- Central UI Update Function --- (Same)
-    function renderGameState() { /* ... */ }
-
-    // --- Game Logic --- (startNewGame remains the same, it just calls the new getWordFromApi)
-    async function startNewGame() { /* ... */ }
-
-    // --- UI Updates (createLetterButtons) --- (Same)
-    function createLetterButtons() { /* ... */ }
-
-    // --- Handle Guess Logic --- (Same)
-    function handleGuess(letter) { /* ... */ }
-
-    // --- Reveal Logic --- (Same)
-    function revealHangmanPart() { /* ... */ }
-
-    // --- Win/Loss Checks --- (Same)
-    function checkWinCondition() { /* ... */ }
-    function checkLossCondition() { /* ... */ }
-
-    // --- Physics Activation --- (Same)
-    function activateHangmanPhysics() { /* ... */ }
-
-    // --- API Integration ---
-
-    // Helper function (remains the same)
-    function getFriendlyApiModelName(modelId) { /* ... */ }
-
-    // Test function (remains the same)
-    async function testAndSaveApiSettings() { /* ... */ }
-
-    // UI update function (remains the same)
-    function updateApiStatusDisplay(overrideMessage = null) { /* ... */ }
-
-    // Fetch function (remains the same)
-    async function fetchFromApi(prompt) { /* ... */ }
-
-
-    // *** REPLACED with your IMPROVED getWordFromApi function ***
-    // *** Incorporates duplicate prevention, exclusion list, more randomness, and retries ***
-    async function getWordFromApi() {
-        const wordType = currentDifficulty === "easy" ? "simple common" : currentDifficulty === "medium" ? "moderately common" : "less common but recognizable";
-        const lengthRange = currentDifficulty === "easy" ? "4-7" : currentDifficulty === "medium" ? "6-10" : "10-16";
-
-        // Add multiple randomization factors
-        const uniqueifier = Date.now();
-        const randomSeed = Math.floor(Math.random() * 10000);
-
-        // Create exclusion list from previous words
-        const excludeList = previousApiWords.length > 0
-            ? `\nDO NOT use any of these words: ${previousApiWords.join(', ')}.`
-            : '';
-
-        // Add random letter requirement to further diversify results
-        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
-        const useLetterRequirement = Math.random() > 0.5; // 50% chance to include this constraint
-        const letterRequirement = useLetterRequirement
-            ? `\n- Try to include the letter '${randomLetter}' if possible (not required).`
-            : '';
-
-        // Construct the enhanced prompt
-        const prompt = `Generate a **random**, single English word suitable for a hangman game.
-Request ID: ${uniqueifier}-${randomSeed}
-
-Word characteristics:
-- Difficulty: ${currentDifficulty} (${wordType})
-- Length: Approximately ${lengthRange} letters
-- Must be a real dictionary word
-- Must contain ONLY standard English letters (A-Z)
-- Must be safe for all ages${letterRequirement}${excludeList}
-
-IMPORTANT: Respond with ONLY the single word itself, nothing else (no explanations, quotes, punctuation, or introduction).`;
-
-        console.log(`[getWordFromApi] Difficulty: ${currentDifficulty}, Random seed: ${randomSeed}, Attempting to exclude: ${previousApiWords.join(', ')}`);
-
-        // Implement retry logic for duplicates
-        let attempts = 0;
-        const maxAttempts = 3; // Try up to 3 times to get a unique, valid word
-
-        while (attempts < maxAttempts) {
-            attempts++;
-            console.log(`[getWordFromApi] Attempt ${attempts}/${maxAttempts} with prompt:`, prompt); // Log prompt for each attempt
-
-            try {
-                const response = await fetchFromApi(prompt);
-                // Log raw response for debugging each attempt
-                console.log(`[getWordFromApi] Raw API Response (Attempt ${attempts}):`, JSON.stringify(response));
-
-                if (!response) {
-                    console.warn(`[getWordFromApi] API returned empty response on attempt ${attempts}`);
-                    if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 300)); // Small delay before retry
-                    continue; // Try again
-                }
-
-                let potentialWord = response;
-
-                // Extract word if response contains extra text (using the same logic as before)
-                if (response.length > 25 || /[\s":\n]/.test(response)) {
-                    const wordsInResponse = response.match(/[a-zA-Z]{3,}/g);
-                    if (wordsInResponse?.length > 0) {
-                        potentialWord = wordsInResponse[0];
-                        console.log(`[getWordFromApi] Extracted word from complex response (Attempt ${attempts}):`, potentialWord);
-                    } else {
-                         console.log(`[getWordFromApi] Response complex, but no plausible word found (Attempt ${attempts})`);
-                         // Keep original 'response' as potentialWord for cleaning attempt below
-                    }
-                }
-
-                // Clean and validate the word
-                const cleanedWord = potentialWord.replace(/[^a-zA-Z]/g, '').toUpperCase();
-                console.log(`[getWordFromApi] Cleaned word (Attempt ${attempts}):`, cleanedWord);
-
-                // Check if this word was used before in this session
-                if (previousApiWords.includes(cleanedWord)) {
-                    console.warn(`[getWordFromApi] Duplicate word "${cleanedWord}" received - trying again (attempt ${attempts}/${maxAttempts})`);
-                    if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 300)); // Small delay before retry
-                    continue; // Skip this word and try again
-                }
-
-                // Validate word length and format based on difficulty
-                const minLen = currentDifficulty === "easy" ? 3 : currentDifficulty === "medium" ? 5 : 8;
-                const maxLen = currentDifficulty === "easy" ? 9 : currentDifficulty === "medium" ? 14 : 20; // Allow slightly longer words
-                const isValid = cleanedWord.length >= minLen &&
-                               cleanedWord.length <= maxLen &&
-                               /^[A-Z]+$/.test(cleanedWord); // Check it's only letters
-
-                console.log(`[getWordFromApi] Validation (${currentDifficulty}) for "${cleanedWord}": ${isValid ? 'Pass' : 'Fail'} (Len: ${cleanedWord.length}, Expected: ${minLen}-${maxLen})`);
-
-                if (isValid) {
-                    // Add to previously used words for this session
-                    previousApiWords.push(cleanedWord);
-                    // Keep list at reasonable size
-                    if (previousApiWords.length > MAX_STORED_WORDS) {
-                        previousApiWords.shift(); // Remove oldest word
-                    }
-
-                    console.log(`[getWordFromApi] Valid, non-duplicate word found: "${cleanedWord}" (attempt ${attempts})`);
-                    return cleanedWord; // Success!
-                } else {
-                    console.warn(`[getWordFromApi] Word "${cleanedWord}" (from raw: "${response}") failed validation - trying again (attempt ${attempts}/${maxAttempts})`);
-                    // No need to add invalid words to previousApiWords
-                    if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 300)); // Small delay before retry
-                }
-            } catch (error) {
-                // Error likely already logged by fetchFromApi
-                console.error(`[getWordFromApi] Error during attempt ${attempts}:`, error.message);
-                // If the API call itself fails, we might want to stop retrying immediately or after fewer attempts
-                 if (attempts >= maxAttempts) {
-                     console.error("[getWordFromApi] API fetch error occurred on final attempt.");
-                     break; // Exit loop if fetch fails on last try
-                 }
-                 await new Promise(resolve => setTimeout(resolve, 500)); // Longer delay after API error
+            // --- Initialization (Main Game Logic) ---
+            function init() {
+                console.log("Hangman Iframe: init() starting...");
+                // Get UI container
+                gameContainerElement = document.getElementById('game-container');
+                if (!gameContainerElement) { console.error("Hangman Iframe: CRITICAL ERROR - #game-container not found!"); statusMessage = "Initialization Failed! UI Missing."; const statusEl = document.getElementById('status'); if (statusEl) statusEl.textContent = statusMessage; return; }
+                
+                const difficultySelect = document.getElementById('difficulty-select'); if (difficultySelect) { currentDifficulty = difficultySelect.value; maxWrongGuesses = HANGMAN_PART_COUNT[currentDifficulty]; } else { console.warn("Hangman Iframe: Difficulty select element not found, defaulting to medium."); currentDifficulty = 'medium'; maxWrongGuesses = HANGMAN_PART_COUNT.medium; }
+                isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 600; console.log(`Hangman Iframe: Mobile = ${isMobile}, Difficulty = ${currentDifficulty}`);
+                
+                try { 
+                    console.log("Hangman Iframe: Setting up scene..."); setupScene(); 
+                    console.log("Hangman Iframe: Setting up physics..."); setupPhysics(); 
+                    console.log("Hangman Iframe: Initializing UI..."); initUI(); 
+                    console.log("Hangman Iframe: Rendering initial game state..."); renderGameState(); 
+                    const header = document.getElementById('game-container-header'); 
+                    // Make draggable within the iframe body
+                    if (!isMobile && header) { console.log("Hangman Iframe: Making UI draggable."); makeDraggable(gameContainerElement, header, document.body); } else if (isMobile && header) { header.style.cursor = 'default'; } 
+                    console.log("Hangman Iframe: Starting first game..."); 
+                    startNewGame().then(() => { console.log("Hangman Iframe: First game setup potentially complete (async)."); if (!animationFrameId) { console.log("Hangman Iframe: Starting animation loop."); animate(); } else { console.log("Hangman Iframe: Animation loop already running."); } }).catch(err => { console.error("Hangman Iframe: Error during initial startNewGame:", err); statusMessage = "Error starting game. Check console."; renderGameState(); });
+                } catch (error) { console.error("Hangman Iframe: CRITICAL ERROR during init() sequence:", error); statusMessage = "Initialization Failed! Check console."; wordSource = "(Error)"; gameOver = true; renderGameState(); if(gameContainerElement) { const errorDiv = document.createElement('div'); errorDiv.style.color = 'red'; errorDiv.style.marginTop = '10px'; errorDiv.style.fontWeight = 'bold'; errorDiv.textContent = `Initialization Error: ${error.message}. See console for details.`; gameContainerElement.appendChild(errorDiv); } }
             }
-        } // End while loop
 
-        console.error("[getWordFromApi] Failed to get a valid, unique word after", maxAttempts, "attempts. Falling back.");
-        return null; // Indicate failure after all attempts
-    }
-    // *** END of REPLACED getWordFromApi function ***
+            // --- Draggable Element Logic --- 
+            // Modified boundsElement to be iframe body
+            function makeDraggable(elmnt, header, boundsElement) { if (!elmnt || !header || !boundsElement) { console.warn("Draggable elements or bounds not found"); return; } let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0; header.onmousedown = dragMouseDown; function dragMouseDown(e) { e = e || window.event; e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY; document.onmouseup = closeDragElement; document.onmousemove = elementDrag; elmnt.style.opacity = "0.9"; } function elementDrag(e) { e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY; let newTop = elmnt.offsetTop - pos2; let newLeft = elmnt.offsetLeft - pos1; const elmntWidth = elmnt.offsetWidth; const elmntHeight = elmnt.offsetHeight; const maxTop = boundsElement.clientHeight - elmntHeight; const maxLeft = boundsElement.clientWidth - elmntWidth; newTop = Math.max(0, Math.min(newTop, maxTop < 0 ? 0 : maxTop)); newLeft = Math.max(0, Math.min(newLeft, maxLeft < 0 ? 0 : maxLeft)); elmnt.style.top = newTop + "px"; elmnt.style.left = newLeft + "px"; } function closeDragElement() { document.onmouseup = null; document.onmousemove = null; elmnt.style.opacity = "1"; } }
+            
+            // --- UI Setup and Event Listeners ---
+            function initUI() { /* ... (same) ... */ apiKey = localStorage.getItem('hangmanApiKey') || ''; const storedModel = localStorage.getItem('hangmanApiModel'); if (storedModel && ['gemini-1.5-flash', 'openai', 'anthropic'].includes(storedModel)) { apiModel = storedModel; } else { apiModel = 'gemini-1.5-flash'; localStorage.setItem('hangmanApiModel', apiModel); } useApiForWords = localStorage.getItem('hangmanUseApi') === 'true'; const apiKeyInput = document.getElementById('api-key-input'); const apiModelSelect = document.getElementById('api-model-select'); const useApiCheckbox = document.getElementById('use-api-checkbox'); const newGameBtn = document.getElementById('new-game-btn'); const difficultySelect = document.getElementById('difficulty-select'); const testApiBtn = document.getElementById('test-api-btn'); if (apiKeyInput) apiKeyInput.value = apiKey; if (apiModelSelect) apiModelSelect.value = apiModel; if (useApiCheckbox) useApiCheckbox.checked = useApiForWords; if (difficultySelect) difficultySelect.value = currentDifficulty; updateApiStatusDisplay(); if (newGameBtn) newGameBtn.addEventListener('click', startNewGame); if (testApiBtn) testApiBtn.addEventListener('click', testAndSaveApiSettings); if (useApiCheckbox) useApiCheckbox.addEventListener('change', function() { useApiForWords = this.checked; localStorage.setItem('hangmanUseApi', useApiForWords); updateApiStatusDisplay(); }); if (apiKeyInput) apiKeyInput.addEventListener('input', () => { apiKey = apiKeyInput.value.trim(); isApiWorking = false; updateApiStatusDisplay("API key changed. Please Test/Save."); }); if (difficultySelect) difficultySelect.addEventListener('change', () => { currentDifficulty = difficultySelect.value; maxWrongGuesses = HANGMAN_PART_COUNT[currentDifficulty]; console.log('Hangman Iframe: Difficulty changed to ' + currentDifficulty + ', Max Guesses: ' + maxWrongGuesses); }); if (apiModelSelect) apiModelSelect.addEventListener('change', function() { apiModel = this.value; localStorage.setItem('hangmanApiModel', apiModel); isApiWorking = false; updateApiStatusDisplay(); }); setupKeyboardControls(); }
+            
+            // --- Scene Setup (Three.js) --- 
+            // Modified to use window dimensions and append to body
+            function setupScene() { console.log("Hangman Iframe: setupScene() starting..."); try { scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); 
+                const containerWidth = window.innerWidth; // Use iframe window size
+                const containerHeight = window.innerHeight; 
+                console.log(`Hangman Iframe: Window dimensions: ${containerWidth}x${containerHeight}`); if(containerWidth <= 0 || containerHeight <= 0) { console.warn("Hangman Iframe: Window has zero dimensions on setup!"); } 
+                camera = new THREE.PerspectiveCamera(70, containerWidth / Math.max(containerHeight, 1), 0.1, 1000); camera.position.set(0, 1, 12); camera.lookAt(0, 1, 0); console.log("Hangman Iframe: Camera created. Pos:", camera.position.toArray().join(',')); 
+                renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: "high-performance", alpha: false }); /* alpha false might be slightly faster if not needed */ console.log("Hangman Iframe: WebGLRenderer created."); renderer.setSize(containerWidth, containerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2)); renderer.shadowMap.enabled = !isMobile; if (!isMobile) { renderer.shadowMap.type = THREE.PCFSoftShadowMap; } 
+                document.body.appendChild(renderer.domElement); // Append canvas directly to iframe body
+                console.log("Hangman Iframe: Renderer canvas appended to body. Canvas size:", renderer.domElement.width, 'x', renderer.domElement.height); console.log("Hangman Iframe: Renderer Info:", renderer.info); 
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); directionalLight.position.set(8, 15, 10); directionalLight.castShadow = !isMobile; if (!isMobile) { /* shadow settings */ directionalLight.shadow.mapSize.width = 1024; directionalLight.shadow.mapSize.height = 1024; directionalLight.shadow.camera.near = 1; directionalLight.shadow.camera.far = 50; directionalLight.shadow.camera.left = -15; directionalLight.shadow.camera.right = 15; directionalLight.shadow.camera.top = 15; directionalLight.shadow.camera.bottom = -15; } scene.add(directionalLight); console.log("Hangman Iframe: Lights added."); 
+                const groundGeometry = new THREE.PlaneGeometry(100, 100); const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x90EE90, roughness: 0.9, metalness: 0.1 }); const ground = new THREE.Mesh(groundGeometry, groundMaterial); ground.rotation.x = -Math.PI / 2; ground.position.y = -4.5; ground.receiveShadow = !isMobile; scene.add(ground); console.log("Hangman Iframe: Ground plane added."); 
+                controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05; controls.minDistance = 4; controls.maxDistance = 30; controls.maxPolarAngle = Math.PI / 2 - 0.05; controls.target.set(0, 1, 0); controls.update(); console.log("Hangman Iframe: OrbitControls created."); 
+                window.addEventListener('resize', onCanvasContainerResize); // Listen to iframe window resize
+                console.log("Hangman Iframe: Scene setup finished successfully."); } catch (error) { console.error("Hangman Iframe: Error during setupScene:", error); throw error; } }
+            
+            // --- Physics Setup (Cannon.js) ---
+            function setupPhysics() { /* ... (same) ... */ console.log("Hangman Iframe: setupPhysics() starting..."); try { world = new CANNON.World(); world.gravity.set(0, -9.82, 0); world.broadphase = new CANNON.NaiveBroadphase(); world.solver.iterations = 10; world.allowSleep = true; const groundShape = new CANNON.Plane(); groundBody = new CANNON.Body({ mass: 0, shape: groundShape }); groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); groundBody.position.set(0, -4.5, 0); world.addBody(groundBody); console.log("Hangman Iframe: Physics world and ground body created."); } catch (error) { console.error("Hangman Iframe: Error during setupPhysics:", error); throw error; } }
+            
+            // --- Gallows & Hangman Creation --- (Identical Logic, logs updated)
+            function createGallows() { /* ... same mesh/body creation ... Logs updated to Hangman Iframe ... */ console.log("Hangman Iframe: Creating gallows..."); try { Object.values(gallows).forEach(mesh => { if (mesh && mesh.parent) mesh.parent.remove(mesh); }); gallows = { base: null, pole: null, beam: null, support: null, rope: null }; gallowsBodies.forEach(body => { if (body.world) world.remove(body); }); gallowsBodies = []; const baseGeo = new THREE.BoxGeometry(6, 0.8, 2); gallows.base = new THREE.Mesh(baseGeo, woodMaterial); gallows.base.position.y = -4.1; gallows.base.castShadow = !isMobile; gallows.base.receiveShadow = !isMobile; scene.add(gallows.base); console.log("Hangman Iframe: Added gallows.base to scene."); const poleGeo = new THREE.BoxGeometry(0.8, 8, 0.8); gallows.pole = new THREE.Mesh(poleGeo, woodMaterial); gallows.pole.position.set(-2.5, 0, 0); gallows.pole.castShadow = !isMobile; gallows.pole.receiveShadow = !isMobile; scene.add(gallows.pole); console.log("Hangman Iframe: Added gallows.pole to scene."); const beamGeo = new THREE.BoxGeometry(4.5, 0.8, 0.8); gallows.beam = new THREE.Mesh(beamGeo, woodMaterial); gallows.beam.position.set(-0.25, 4.0, 0); gallows.beam.castShadow = !isMobile; gallows.beam.receiveShadow = !isMobile; scene.add(gallows.beam); console.log("Hangman Iframe: Added gallows.beam to scene."); const supportGeo = new THREE.BoxGeometry(3.5, 0.6, 0.6); gallows.support = new THREE.Mesh(supportGeo, woodMaterial); gallows.support.position.set(-1.5, 2.5, 0); gallows.support.rotation.z = Math.PI / 4; gallows.support.castShadow = !isMobile; gallows.support.receiveShadow = !isMobile; scene.add(gallows.support); console.log("Hangman Iframe: Added gallows.support to scene."); const ropeGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.8, 8); gallows.rope = new THREE.Mesh(ropeGeo, ropeMaterial); gallows.rope.position.set(1.7, 3.1, 0); gallows.rope.castShadow = !isMobile; scene.add(gallows.rope); console.log("Hangman Iframe: Added gallows.rope to scene."); const addStaticBody = (shape, position, quaternion) => { const body = new CANNON.Body({ mass: 0, shape }); body.position.copy(position); if (quaternion) body.quaternion.copy(quaternion); world.addBody(body); gallowsBodies.push(body); }; addStaticBody(new CANNON.Box(new CANNON.Vec3(3, 0.4, 1)), gallows.base.position); addStaticBody(new CANNON.Box(new CANNON.Vec3(0.4, 4, 0.4)), gallows.pole.position); addStaticBody(new CANNON.Box(new CANNON.Vec3(2.25, 0.4, 0.4)), gallows.beam.position); console.log("Hangman Iframe: Gallows creation finished."); } catch (error) { console.error("Hangman Iframe: Error during createGallows:", error); } }
+            function createHangmanParts() { /* ... same mesh/body creation ... Logs updated to Hangman Iframe ... */ console.log("Hangman Iframe: Creating hangman parts..."); try { hangmanParts.forEach(part => { if (part.mesh && part.mesh.parent) part.mesh.parent.remove(part.mesh); }); hangmanPhysicsBodies.forEach(item => { if (item.body && item.body.world) world.remove(item.body); }); hangmanParts = []; hangmanPhysicsBodies = []; smileFaceGroup = null; grumpyFaceGroup = null; headMainSphere = null; const partsToCreate = HANGMAN_PART_COUNT[currentDifficulty] || 0; console.log(`Hangman Iframe: Need to create ${partsToCreate} hangman parts for difficulty ${currentDifficulty}.`); if (partsToCreate <= 0) { console.warn("Hangman Iframe: No hangman parts to create."); return; } const headBasePosition = new THREE.Vector3(1.7, 1.7, 0); smileFaceGroup = new THREE.Group(); smileFaceGroup.visible = false; grumpyFaceGroup = new THREE.Group(); grumpyFaceGroup.visible = false; const eyeRadius = 0.15; const eyeY = 0.1; const eyeZ = 0.48; const smileEyeGeo = new THREE.SphereGeometry(0.06, 12, 8); const smileLeftEye = new THREE.Mesh(smileEyeGeo, faceDetailMaterial); smileLeftEye.position.set(-eyeRadius, eyeY, eyeZ); smileFaceGroup.add(smileLeftEye); const smileRightEye = new THREE.Mesh(smileEyeGeo, faceDetailMaterial); smileRightEye.position.set(eyeRadius, eyeY, eyeZ); smileFaceGroup.add(smileRightEye); const smileGeo = new THREE.TorusGeometry(0.2, 0.03, 8, 16, Math.PI); const smileMouth = new THREE.Mesh(smileGeo, faceDetailMaterial); smileMouth.position.set(0, -0.15, eyeZ - 0.02); smileMouth.rotation.z = Math.PI; smileFaceGroup.add(smileMouth); const crossSize = 0.35; const crossThickness = 0.03; const eyeX = 0.20; const eyeYGrumpy = 0.1; const eyeZGrumpy = 0.45; const crossGeo = new THREE.CylinderGeometry(crossThickness, crossThickness, crossSize, 6); const l_eye1 = new THREE.Mesh(crossGeo, faceDetailMaterial); l_eye1.position.set(-eyeX, eyeYGrumpy, eyeZGrumpy); l_eye1.rotation.z = Math.PI / 4; grumpyFaceGroup.add(l_eye1); const l_eye2 = new THREE.Mesh(crossGeo, faceDetailMaterial); l_eye2.position.set(-eyeX, eyeYGrumpy, eyeZGrumpy); l_eye2.rotation.z = -Math.PI / 4; grumpyFaceGroup.add(l_eye2); const r_eye1 = new THREE.Mesh(crossGeo, faceDetailMaterial); r_eye1.position.set(eyeX, eyeYGrumpy, eyeZGrumpy); r_eye1.rotation.z = Math.PI / 4; grumpyFaceGroup.add(r_eye1); const r_eye2 = new THREE.Mesh(crossGeo, faceDetailMaterial); r_eye2.position.set(eyeX, eyeYGrumpy, eyeZGrumpy); r_eye2.rotation.z = -Math.PI / 4; grumpyFaceGroup.add(r_eye2); const grumpyMouthGeo = new THREE.BoxGeometry(0.4, 0.05, 0.05); const grumpyMouth = new THREE.Mesh(grumpyMouthGeo, faceDetailMaterial); grumpyMouth.position.set(0, -0.18, eyeZGrumpy + 0.03); grumpyFaceGroup.add(grumpyMouth); const partDefinitions = [ { name: "head", geo: new THREE.SphereGeometry(0.5, 24, 18), mat: skinMaterial, pos: [headBasePosition.x, headBasePosition.y, headBasePosition.z], physShape: new CANNON.Sphere(0.5), mass: 3 }, { name: "body", geo: new THREE.BoxGeometry(0.9, 1.4, 0.5), mat: blueMaterial, pos: [1.7, 0.5, 0], physShape: new CANNON.Box(new CANNON.Vec3(0.45, 0.7, 0.25)), mass: 6 }, { name: "l_arm", geo: new THREE.BoxGeometry(0.8, 0.3, 0.3), mat: blueMaterial, pos: [1.0, 0.9, 0], rot: [0, 0, 0.3], physShape: new CANNON.Box(new CANNON.Vec3(0.4, 0.15, 0.15)), mass: 1 }, { name: "r_arm", geo: new THREE.BoxGeometry(0.8, 0.3, 0.3), mat: blueMaterial, pos: [2.4, 0.9, 0], rot: [0, 0, -0.3], physShape: new CANNON.Box(new CANNON.Vec3(0.4, 0.15, 0.15)), mass: 1 }, { name: "l_leg", geo: new THREE.BoxGeometry(0.3, 0.9, 0.3), mat: blackMaterial, pos: [1.45, -0.4, 0], physShape: new CANNON.Box(new CANNON.Vec3(0.15, 0.45, 0.15)), mass: 2 }, { name: "r_leg", geo: new THREE.BoxGeometry(0.3, 0.9, 0.3), mat: blackMaterial, pos: [1.95, -0.4, 0], physShape: new CANNON.Box(new CANNON.Vec3(0.15, 0.45, 0.15)), mass: 2 }, { name: "l_foot", geo: new THREE.BoxGeometry(0.35, 0.2, 0.45), mat: blackMaterial, pos: [1.45, -0.9, 0.05], physShape: new CANNON.Box(new CANNON.Vec3(0.175, 0.1, 0.225)), mass: 0.5 }, { name: "r_foot", geo: new THREE.BoxGeometry(0.35, 0.2, 0.45), mat: blackMaterial, pos: [1.95, -0.9, 0.05], physShape: new CANNON.Box(new CANNON.Vec3(0.175, 0.1, 0.225)), mass: 0.5 }, { name: "hat", geo: new THREE.CylinderGeometry(0.3, 0.4, 0.3, 16), mat: blackMaterial, pos: [1.7, 2.25, 0], physShape: new CANNON.Cylinder(0.3, 0.4, 0.3, 8), mass: 0.5 } ]; for (let i = 0; i < partsToCreate; i++) { if (i >= partDefinitions.length) { console.log(`Hangman Iframe: Ran out of part definitions at index ${i}`); hangmanParts.push({ mesh: null }); continue; } const def = partDefinitions[i]; if (!def) { console.warn(`Hangman Iframe: Part definition missing for index ${i}`); hangmanParts.push({ mesh: null }); continue; } const mesh = new THREE.Mesh(def.geo, def.mat); mesh.position.set(...def.pos); if (def.rot) mesh.rotation.set(...def.rot); mesh.castShadow = !isMobile; mesh.visible = false; mesh.name = def.name; scene.add(mesh); console.log(`Hangman Iframe: Added mesh "${mesh.name}" to scene (pos: ${mesh.position.toArray().join(',')}, initially hidden).`); if (def.name === "head") { headMainSphere = mesh; mesh.add(smileFaceGroup); mesh.add(grumpyFaceGroup); console.log("Hangman Iframe: Added faces to head mesh."); } const body = new CANNON.Body({ mass: def.mass, shape: def.physShape, position: new CANNON.Vec3(...def.pos), linearDamping: 0.2, angularDamping: 0.2 }); if(def.rot) { const euler = new THREE.Euler(...def.rot, 'XYZ'); body.quaternion.setFromEuler(euler.x, euler.y, euler.z, 'XYZ'); } body.name = def.name; body.allowSleep = true; body.sleep(); hangmanPhysicsBodies.push({ mesh: mesh, body: body }); hangmanParts.push({ mesh: mesh }); } console.log(`Hangman Iframe: Finished creating ${hangmanParts.length} part entries...`); } catch (error) { console.error("Hangman Iframe: Error during createHangmanParts:", error); } }
+            
+            // --- Central UI Update Function ---
+            function renderGameState() { /* ... (same) ... */ try { const statusEl = document.getElementById('status'); if (statusEl) statusEl.textContent = statusMessage; const sourceEl = document.getElementById('word-source'); if (sourceEl) sourceEl.textContent = wordSource ? `(Source: ${wordSource})` : ''; const wordDisplayEl = document.getElementById('word-display'); if (wordDisplayEl) { if (currentWord && currentWord !== "ERROR") { const display = currentWord.split('').map(letter => (guessedLetters.includes(letter) || gameOver) ? letter : '_').join(''); wordDisplayEl.textContent = display.split('').join(' '); } else if (currentWord === "ERROR") { wordDisplayEl.textContent = "E R R O R"; } else { wordDisplayEl.textContent = ""; } } const usedLettersEl = document.getElementById('used-letters'); if (usedLettersEl) { usedLettersEl.textContent = guessedLetters.sort().join(', '); } createLetterButtons(); } catch (uiError) { console.error("Error updating UI in renderGameState:", uiError); const statusEl = document.getElementById('status'); if (statusEl) statusEl.textContent = "UI Update Error!"; } }
+            // --- Game Logic ---
+            async function startNewGame() { /* ... (same) ... Logs updated to Hangman Iframe ... */ console.log(`Hangman Iframe: --- Start New Game --- Difficulty: ${currentDifficulty}`); gameOver = false; wrongGuesses = 0; guessedLetters = []; currentWord = ""; wordSource = ""; statusMessage = `Starting new ${currentDifficulty} game...`; renderGameState(); try { console.log("Hangman Iframe: Resetting physics bodies..."); hangmanPhysicsBodies.forEach(item => { if (item?.body?.world) world.remove(item.body); }); gallowsBodies.forEach(body => { if (body?.world) world.remove(body); }); hangmanPhysicsBodies = []; gallowsBodies = []; console.log("Hangman Iframe: Physics bodies removed."); createGallows(); createHangmanParts(); console.log("Hangman Iframe: Visual elements recreated."); } catch (resetError) { console.error("Hangman Iframe: Error resetting scene/physics:", resetError); statusMessage = "Error resetting game visuals! Check console."; wordSource = "(Error)"; currentWord = "ERROR"; gameOver = true; renderGameState(); if (!animationFrameId) animate(); return; } try { let word = null; let apiAttempted = false; statusMessage = `Choosing ${currentDifficulty} word...`; renderGameState(); if (useApiForWords && isApiWorking) { apiAttempted = true; const friendlyModelName = getFriendlyApiModelName(apiModel); statusMessage = `Getting ${currentDifficulty} word from ${friendlyModelName}...`; renderGameState(); word = await getWordFromApi(); if (word) { console.log("Hangman Iframe: API Success:", word); wordSource = 'AI'; } else { console.warn("Hangman Iframe: API failed or returned invalid/duplicate word. Falling back."); statusMessage = `AI failed. Using local ${currentDifficulty} word...`; wordSource = 'Local'; renderGameState(); } } if (!word) { if (!apiAttempted) { console.log(`Hangman Iframe: Using local ${currentDifficulty} word list.`); wordSource = 'Local'; statusMessage = `Using local ${currentDifficulty} word...`; renderGameState(); } else { console.log(`Hangman Iframe: Fell back to local ${currentDifficulty} word list.`); } const words = DEFAULT_WORDS[currentDifficulty]; if (!words || words.length === 0) throw new Error(`No local words for ${currentDifficulty}`); word = words[Math.floor(Math.random() * words.length)]; wordSource = 'Local'; console.log("Hangman Iframe: Selected local word:", word); } currentWord = word.toUpperCase(); statusMessage = `Guess a letter! ${maxWrongGuesses - wrongGuesses} guesses left.`; console.log(`Hangman Iframe: Final Word: "${currentWord}", Source: ${wordSource}`); } catch (error) { console.error("Hangman Iframe: CRITICAL error getting word:", error); statusMessage = `Error: ${error.message}. Try New Game.`; wordSource = '(Error)'; currentWord = "ERROR"; gameOver = true; } finally { renderGameState(); console.log("Hangman Iframe: --- End New Game ---"); } }
+            // --- UI Updates (createLetterButtons) ---
+            function createLetterButtons() { /* ... (same) ... */ const container = document.getElementById('letters-container'); if (!container) return; container.innerHTML = ''; if (!currentWord || currentWord === "ERROR" || statusMessage.includes("Starting") || statusMessage.includes("Choosing") || statusMessage.includes("Getting")) { return; } for (let i = 65; i <= 90; i++) { const letter = String.fromCharCode(i); const button = document.createElement('button'); button.textContent = letter; button.className = 'letter-button'; button.dataset.letter = letter; const isGuessed = guessedLetters.includes(letter); button.disabled = gameOver || isGuessed; button.classList.toggle('disabled', button.disabled); if (isGuessed) { const correct = currentWord.includes(letter); button.classList.toggle('correct', correct); button.classList.toggle('incorrect', !correct); } button.addEventListener('click', () => handleGuess(letter)); container.appendChild(button); } }
+            // --- Handle Guess Logic ---
+            function handleGuess(letter) { /* ... (same) ... */ if (gameOver || guessedLetters.includes(letter) || !currentWord || currentWord === "ERROR") return; guessedLetters.push(letter); if (currentWord.includes(letter)) { statusMessage = `Correct! '${letter}' is in the word.`; checkWinCondition(); } else { wrongGuesses++; statusMessage = `Wrong! '${letter}' not found. ${maxWrongGuesses - wrongGuesses} guesses left.`; revealHangmanPart(); checkLossCondition(); } renderGameState(); }
+            // --- Reveal Logic ---
+            function revealHangmanPart() { /* ... (same) ... Logs updated to Hangman Iframe ... */ if (wrongGuesses <= 0 || wrongGuesses > hangmanParts.length) { console.warn(`Hangman Iframe: Invalid wrongGuesses (${wrongGuesses}) or index out of bounds for hangmanParts (${hangmanParts.length})`); return; } const partIndex = wrongGuesses - 1; console.log(`Hangman Iframe: Revealing part index ${partIndex} (Wrong Guesses: ${wrongGuesses})`); const part = hangmanParts[partIndex]; if (part && part.mesh) { const partMesh = part.mesh; if (!partMesh.visible) { console.log(`Hangman Iframe: Making mesh "${partMesh.name}" visible.`); partMesh.visible = true; if (partIndex === 0 && headMainSphere) { if(smileFaceGroup) smileFaceGroup.visible = true; if(grumpyFaceGroup) grumpyFaceGroup.visible = false; console.log("Hangman Iframe: Revealed head, showing smile face."); } const originalScale = partMesh.scale.clone(); partMesh.scale.set(1.3, 1.3, 1.3); let startTime = performance.now(); function scaleDown() { if (!partMesh || !partMesh.parent) return; const elapsed = performance.now() - startTime; const progress = Math.min(elapsed / 150, 1); const scale = 1.3 - 0.3 * progress; partMesh.scale.set(scale, scale, scale); if (progress < 1) { requestAnimationFrame(scaleDown); } else { partMesh.scale.copy(originalScale); } } requestAnimationFrame(scaleDown); } else { console.log(`Hangman Iframe: Part mesh "${partMesh.name}" at index ${partIndex} was already visible.`); } } else { console.warn(`Hangman Iframe: Attempted to reveal part index ${partIndex}, but part or mesh was missing/null.`); } if (currentDifficulty === 'hard' && wrongGuesses === maxWrongGuesses - FACE_CHANGE_GUESS_OFFSET) { if (smileFaceGroup && grumpyFaceGroup && headMainSphere && headMainSphere.visible) { smileFaceGroup.visible = false; grumpyFaceGroup.visible = true; console.log("Hangman Iframe: Switched to grumpy face for hard mode nearing end."); } } }
+            // --- Win/Loss Checks ---
+            function checkWinCondition() { /* ... (same) ... Logs updated to Hangman Iframe ... */ if (!currentWord || gameOver) return; const allLettersGuessed = currentWord.split('').every(char => guessedLetters.includes(char)); if (allLettersGuessed) { statusMessage = `Congratulations! You guessed "${currentWord}"!`; gameOver = true; console.log("Hangman Iframe: --- Game Won ---"); } }
+            function checkLossCondition() { /* ... (same) ... Logs updated to Hangman Iframe ... */ if (gameOver) return; if (wrongGuesses >= maxWrongGuesses) { statusMessage = `Game Over! The word was "${currentWord}".`; gameOver = true; console.log("Hangman Iframe: --- Game Lost --- Activating Physics"); activateHangmanPhysics(); } }
+            // --- Physics Activation ---
+            function activateHangmanPhysics() { /* ... (same) ... Logs updated to Hangman Iframe ... */ console.log("Hangman Iframe: --- Activating Physics ---"); if (!world) { console.error("Hangman Iframe: Cannot activate physics, world not initialized."); return; } if (gallows.rope && gallows.rope.parent) { scene.remove(gallows.rope); gallows.rope = null; console.log("Hangman Iframe: Removed visual rope."); } const tempWorldPos = new THREE.Vector3(); const tempWorldQuat = new THREE.Quaternion(); let physicsActivatedCount = 0; hangmanPhysicsBodies.forEach((item, index) => { if (!item?.body || !item?.mesh) { console.warn(`Hangman Iframe: Skipping physics activation for item ${index}, body or mesh missing.`); return; } const meshName = item.mesh.name || `mesh_${index}`; if(!item.mesh.visible) { console.warn(`Hangman Iframe: Physics body mesh ${meshName} is not visible during activation! Making it visible.`); item.mesh.visible = true; } if (item.mesh === headMainSphere) { if (smileFaceGroup) smileFaceGroup.visible = (currentDifficulty !== 'hard'); if (grumpyFaceGroup) grumpyFaceGroup.visible = (currentDifficulty === 'hard'); } if (!item.body.world) { try { world.addBody(item.body); physicsActivatedCount++; } catch (addError) { console.error(`Hangman Iframe: ERROR adding body ${meshName} to world:`, addError); return; } } item.body.sleepState = CANNON.Body.AWAKE; item.body.velocity.set(0,0,0); item.body.angularVelocity.set(0,0,0); item.body.force.set(0,0,0); item.body.torque.set(0,0,0); try { item.mesh.getWorldPosition(tempWorldPos); item.body.position.copy(tempWorldPos); item.mesh.getWorldQuaternion(tempWorldQuat); item.body.quaternion.copy(tempWorldQuat); const impulseStrength = 1.5 + Math.random() * 1.0; const randomVec = new CANNON.Vec3( (Math.random() - 0.5) * impulseStrength, (Math.random() - 0.8) * impulseStrength, (Math.random() - 0.5) * impulseStrength ); const point = new CANNON.Vec3( (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2 ); item.body.applyImpulse(randomVec, point); item.body.angularVelocity.set( (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6 ); } catch (syncError) { console.error(`Hangman Iframe: Error syncing/applying impulse to body ${meshName}:`, syncError); } }); if (physicsActivatedCount === 0 && hangmanPhysicsBodies.length > 0) { console.warn("Hangman Iframe: No new physics bodies were added during activation, but bodies exist."); } else if (hangmanPhysicsBodies.length === 0) { console.warn("Hangman Iframe: No hangman physics bodies found to activate."); } console.log(`Hangman Iframe: --- Finished Activating Physics (${physicsActivatedCount} bodies added/woken) ---`); }
+            // --- API Integration ---
+            function getFriendlyApiModelName(modelId) { /* ... (same) ... */ switch(modelId) { case 'gemini-1.5-flash': return 'Google Gemini Flash'; case 'openai': return 'OpenAI GPT-3.5'; case 'anthropic': return 'Anthropic Claude Haiku'; default: return modelId; } }
+            async function testAndSaveApiSettings() { /* ... (same) ... */ apiKey = document.getElementById('api-key-input')?.value.trim() || ''; apiModel = document.getElementById('api-model-select')?.value || 'gemini-1.5-flash'; const statusEl = document.getElementById('api-status'); const friendlyModelName = getFriendlyApiModelName(apiModel); if (!statusEl) return; if (!apiKey) { statusEl.textContent = 'Please enter an API key.'; statusEl.style.color = 'orange'; isApiWorking = false; updateApiStatusDisplay(); return; } statusEl.textContent = `Testing ${friendlyModelName}...`; statusEl.style.color = 'blue'; isApiWorking = false; try { const testPrompt = "Respond with only the word 'test'."; const result = await fetchFromApi(testPrompt); if (result && result.toLowerCase().includes('test')) { statusEl.textContent = `${friendlyModelName} connection successful! Key saved.`; statusEl.style.color = 'green'; isApiWorking = true; localStorage.setItem('hangmanApiKey', apiKey); localStorage.setItem('hangmanApiModel', apiModel); } else { throw new Error(`API test failed. Unexpected response: ${result || '(empty response)'}`); } } catch (error) { console.error('API test error:', error); statusEl.textContent = `Connection failed: ${error.message || 'Unknown error'}. Check key/model/network.`; statusEl.style.color = 'red'; isApiWorking = false; } updateApiStatusDisplay(); }
+            function updateApiStatusDisplay(overrideMessage = null) { /* ... (same) ... */ const statusEl = document.getElementById('api-status'); if (!statusEl) return; const friendlyModelName = getFriendlyApiModelName(apiModel); if (overrideMessage) { statusEl.textContent = overrideMessage; if (overrideMessage.toLowerCase().includes("fail") || overrideMessage.toLowerCase().includes("error")) statusEl.style.color = 'red'; else if (overrideMessage.toLowerCase().includes("success") || overrideMessage.toLowerCase().includes("verified")) statusEl.style.color = 'green'; else if (overrideMessage.toLowerCase().includes("changed")) statusEl.style.color = 'orange'; else statusEl.style.color = 'blue'; return; } const keyEntered = !!apiKey; if (!keyEntered) { statusEl.textContent = 'Enter API key and click Test/Save.'; statusEl.style.color = '#555'; } else if (isApiWorking) { statusEl.textContent = `${friendlyModelName} connection verified. ${useApiForWords ? 'Using AI.' : 'API available.'}`; statusEl.style.color = 'green'; } else { statusEl.textContent = `Key entered for ${friendlyModelName}, but not verified. Click Test/Save.`; statusEl.style.color = 'orange'; } }
+            async function fetchFromApi(prompt) { /* ... (same) ... */ if (!apiKey) throw new Error("API key is missing"); let apiEndpoint = '', requestData = {}, headers = { 'Content-Type': 'application/json' }; const friendlyModelName = getFriendlyApiModelName(apiModel); try { if (apiModel === 'gemini-1.5-flash') { apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`; requestData = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 30, temperature: 0.9, topP: 0.95 } }; } else if (apiModel === 'openai') { apiEndpoint = 'https://api.openai.com/v1/chat/completions'; headers['Authorization'] = `Bearer ${apiKey}`; requestData = { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: prompt }], max_tokens: 20, temperature: 0.8 }; } else if (apiModel === 'anthropic') { apiEndpoint = 'https://api.anthropic.com/v1/messages'; headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = apiKey; requestData = { model: 'claude-3-haiku-20240307', max_tokens: 30, messages: [{ role: 'user', content: prompt }], temperature: 0.8 }; } else { throw new Error(`Unsupported API model: ${apiModel}`); } console.log(`[fetchFromApi] Sending request to ${friendlyModelName}`); const response = await fetch(apiEndpoint, { method: 'POST', headers: headers, body: JSON.stringify(requestData), signal: AbortSignal.timeout(15000) }); if (!response.ok) { let errorBody = `Status: ${response.status}`; try { const errorJson = await response.json(); errorBody = JSON.stringify(errorJson.error || errorJson); } catch (e) { try { errorBody = await response.text(); } catch (e2) {} } throw new Error(`API request failed. ${errorBody.substring(0, 200)}`); } const data = await response.json(); let responseText = ''; if (apiModel === 'gemini-1.5-flash') { responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''; } else if (apiModel === 'openai') { responseText = data.choices?.[0]?.message?.content || ''; } else if (apiModel === 'anthropic') { responseText = data.content?.find(block => block.type === 'text')?.text || ''; } return responseText.trim(); } catch (error) { console.error(`[fetchFromApi] API error for ${friendlyModelName}:`, error); throw error; } }
+            async function getWordFromApi() { /* ... (same) ... */ const wordType = currentDifficulty === "easy" ? "simple common" : currentDifficulty === "medium" ? "moderately common" : "less common but recognizable"; const lengthRange = currentDifficulty === "easy" ? "4-7" : currentDifficulty === "medium" ? "6-10" : "10-16"; const uniqueifier = Date.now(); const randomSeed = Math.floor(Math.random() * 10000); const excludeList = previousApiWords.length > 0 ? `\nDO NOT use any of these words: ${previousApiWords.join(', ')}.` : ''; const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)]; const useLetterRequirement = Math.random() > 0.5; const letterRequirement = useLetterRequirement ? `\n- Try to include the letter '${randomLetter}' if possible (not required).` : ''; const prompt = `Generate a **random**, single English word suitable for a hangman game. Request ID: ${uniqueifier}-${randomSeed}\n\nWord characteristics:\n- Difficulty: ${currentDifficulty} (${wordType})\n- Length: Approximately ${lengthRange} letters\n- Must be a real dictionary word\n- Must contain ONLY standard English letters (A-Z)\n- Must be safe for all ages${letterRequirement}${excludeList}\n\nIMPORTANT: Respond with ONLY the single word itself, nothing else (no explanations, quotes, punctuation, or introduction).`; console.log(`[getWordFromApi] Difficulty: ${currentDifficulty}, Random seed: ${randomSeed}, Attempting to exclude: ${previousApiWords.join(', ')}`); let attempts = 0; const maxAttempts = 3; while (attempts < maxAttempts) { attempts++; try { const response = await fetchFromApi(prompt); if (!response) { console.warn(`[getWordFromApi] API returned empty response on attempt ${attempts}`); if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 300)); continue; } let potentialWord = response; if (response.length > 25 || /[\s":\n]/.test(response)) { const wordsInResponse = response.match(/[a-zA-Z]{3,}/g); if (wordsInResponse?.length > 0) { potentialWord = wordsInResponse[0]; } } const cleanedWord = potentialWord.replace(/[^a-zA-Z]/g, '').toUpperCase(); if (previousApiWords.includes(cleanedWord)) { console.warn(`[getWordFromApi] Duplicate word "${cleanedWord}" received - trying again (attempt ${attempts}/${maxAttempts})`); if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 300)); continue; } const minLen = currentDifficulty === "easy" ? 3 : currentDifficulty === "medium" ? 5 : 8; const maxLen = currentDifficulty === "easy" ? 9 : currentDifficulty === "medium" ? 14 : 20; const isValid = cleanedWord.length >= minLen && cleanedWord.length <= maxLen && /^[A-Z]+$/.test(cleanedWord); if (isValid) { previousApiWords.push(cleanedWord); if (previousApiWords.length > MAX_STORED_WORDS) { previousApiWords.shift(); } console.log(`[getWordFromApi] Valid, non-duplicate word found: "${cleanedWord}" (attempt ${attempts})`); return cleanedWord; } else { console.warn(`[getWordFromApi] Word "${cleanedWord}" (from raw: "${response}") failed validation - trying again (attempt ${attempts}/${maxAttempts})`); if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 300)); } } catch (error) { console.error(`[getWordFromApi] Error during attempt ${attempts}:`, error.message); if (attempts >= maxAttempts) { console.error("[getWordFromApi] API fetch error occurred on final attempt."); break; } await new Promise(resolve => setTimeout(resolve, 500)); } } console.error("[getWordFromApi] Failed to get a valid, unique word after", maxAttempts, "attempts. Falling back."); return null; }
+            
+            // --- Event Handlers & Loop ---
+             // Modified resize to use window dimensions
+            function onCanvasContainerResize() { if (!camera || !renderer) return; 
+                const newWidth = window.innerWidth; // Use iframe window size
+                const newHeight = window.innerHeight; 
+                if (newWidth > 0 && newHeight > 0) { camera.aspect = newWidth / newHeight; camera.updateProjectionMatrix(); renderer.setSize(newWidth, newHeight); console.log(`Hangman Iframe: Resized to ${newWidth}x${newHeight}`); } else { console.warn("Hangman Iframe: Window resize triggered with zero dimensions."); } }
+            function setupKeyboardControls() { /* ... (same) ... */ document.addEventListener('keydown', (event) => { const activeElement = document.activeElement; const isInGameUI = gameContainerElement && gameContainerElement.contains(activeElement); const isInputFocused = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.tagName === 'SELECT'); if (gameOver || event.ctrlKey || event.metaKey || event.altKey || !currentWord || currentWord==="ERROR") return; if (isInGameUI && isInputFocused) { return; } /* No need to check !isInGameUI */ if (event.key.length === 1 && event.key.match(/[a-z]/i)) { const letter = event.key.toUpperCase(); const button = document.querySelector(`#letters-container .letter-button[data-letter="${letter}"]`); if (button && !button.disabled) { handleGuess(letter); } } }); }
+            function animate() { /* ... (same) ... */ animationFrameId = requestAnimationFrame(animate); const deltaTime = 1 / 60; let frameRendered = false; try { if (gameOver && world && hangmanPhysicsBodies.length > 0 && hangmanPhysicsBodies[0]?.body?.world) { world.step(deltaTime); hangmanPhysicsBodies.forEach(item => { if (item?.body && item?.mesh) { item.mesh.position.copy(item.body.position); item.mesh.quaternion.copy(item.body.quaternion); } }); } } catch (physicsError) { console.error("Hangman Iframe: Physics step/sync error:", physicsError); } try { if (controls) controls.update(); if (renderer && scene && camera) { renderer.render(scene, camera); frameRendered = true; } else { if (!renderer) console.warn("Hangman Iframe: Animate - Renderer missing!"); if (!scene) console.warn("Hangman Iframe: Animate - Scene missing!"); if (!camera) console.warn("Hangman Iframe: Animate - Camera missing!"); } } catch (renderError) { console.error("Hangman Iframe: Render error in animate loop:", renderError); } }
 
+            // --- Start Initializing ---
+            init(); // Call the main game init function
 
-    // --- Event Handlers & Loop --- (Same)
-    function onWindowResize() { /* ... */ }
-    function setupKeyboardControls() { /* ... */ }
-    function animate() { /* ... */ }
-
-    // --- Start ---
-    window.addEventListener('load', init);
-
-    // --- Fill in the empty function bodies for completeness ---
-    // (These are just placeholders, the actual logic is the same as your previous version)
-    function init() { console.log("Initializing game..."); isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); try { setupScene(); setupPhysics(); initUI(); renderGameState(); if (!isMobile) { makeDraggable(document.getElementById('game-container'), document.getElementById('game-container-header')); } startNewGame(); if (!animationFrameId) { animate(); } console.log("Initialization complete."); } catch (error) { console.error("CRITICAL ERROR during initialization:", error); statusMessage = "Initialization Failed! Check console."; wordSource = "(Error)"; gameOver = true; renderGameState(); } }
-    function makeDraggable(elmnt, header) { if (!elmnt || !header) { console.error("Draggable elements not found"); return; } let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0; header.onmousedown = dragMouseDown; function dragMouseDown(e) { e = e || window.event; e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY; document.onmouseup = closeDragElement; document.onmousemove = elementDrag; elmnt.style.opacity = "0.9"; } function elementDrag(e) { e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY; let newTop = elmnt.offsetTop - pos2; let newLeft = elmnt.offsetLeft - pos1; const margin = 5; const maxTop = window.innerHeight - elmnt.offsetHeight - margin; const maxLeft = window.innerWidth - elmnt.offsetWidth - margin; newTop = Math.max(margin, Math.min(newTop, maxTop < margin ? margin : maxTop)); newLeft = Math.max(margin, Math.min(newLeft, maxLeft < margin ? margin : maxLeft)); elmnt.style.top = newTop + "px"; elmnt.style.left = newLeft + "px"; } function closeDragElement() { document.onmouseup = null; document.onmousemove = null; elmnt.style.opacity = "1"; } }
-    function initUI() { apiKey = localStorage.getItem('hangmanApiKey') || ''; const storedModel = localStorage.getItem('hangmanApiModel'); if (storedModel && ['gemini-1.5-flash', 'openai', 'anthropic'].includes(storedModel)) { apiModel = storedModel; } else { apiModel = 'gemini-1.5-flash'; localStorage.setItem('hangmanApiModel', apiModel); } useApiForWords = localStorage.getItem('hangmanUseApi') === 'true'; document.getElementById('api-key-input').value = apiKey; document.getElementById('api-model-select').value = apiModel; document.getElementById('use-api-checkbox').checked = useApiForWords; updateApiStatusDisplay(); document.getElementById('new-game-btn').addEventListener('click', startNewGame); document.getElementById('difficulty-select').addEventListener('change', () => {}); document.getElementById('test-api-btn').addEventListener('click', testAndSaveApiSettings); document.getElementById('api-model-select').addEventListener('change', function() { apiModel = this.value; localStorage.setItem('hangmanApiModel', apiModel); isApiWorking = false; updateApiStatusDisplay(); }); document.getElementById('use-api-checkbox').addEventListener('change', function() { useApiForWords = this.checked; localStorage.setItem('hangmanUseApi', useApiForWords); updateApiStatusDisplay(); }); document.getElementById('api-key-input').addEventListener('input', () => { apiKey = document.getElementById('api-key-input').value.trim(); isApiWorking = false; updateApiStatusDisplay("API key changed. Please Test/Save."); }); setupKeyboardControls(); }
-    function setupScene() { scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000); camera.position.set(0, 1, 12); renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: "high-performance" }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2)); renderer.shadowMap.enabled = !isMobile; if (!isMobile) { renderer.shadowMap.type = THREE.PCFSoftShadowMap; } document.body.appendChild(renderer.domElement); const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); scene.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7); directionalLight.position.set(8, 12, 10); directionalLight.castShadow = !isMobile; if (!isMobile) { directionalLight.shadow.mapSize.width = 1024; directionalLight.shadow.mapSize.height = 1024; directionalLight.shadow.camera.near = 1; directionalLight.shadow.camera.far = 50; directionalLight.shadow.camera.left = -12; directionalLight.shadow.camera.right = 12; directionalLight.shadow.camera.top = 12; directionalLight.shadow.camera.bottom = -12; } scene.add(directionalLight); const groundGeometry = new THREE.PlaneGeometry(100, 100); const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x90EE90, roughness: 0.9, metalness: 0.1 }); const ground = new THREE.Mesh(groundGeometry, groundMaterial); ground.rotation.x = -Math.PI / 2; ground.position.y = -4.5; ground.receiveShadow = !isMobile; scene.add(ground); controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05; controls.minDistance = 4; controls.maxDistance = 25; controls.maxPolarAngle = Math.PI / 2 - 0.05; controls.target.set(0, 1, 0); controls.update(); window.addEventListener('resize', onWindowResize); }
-    function setupPhysics() { world = new CANNON.World(); world.gravity.set(0, -9.82, 0); world.broadphase = new CANNON.NaiveBroadphase(); world.solver.iterations = 10; const groundShape = new CANNON.Plane(); groundBody = new CANNON.Body({ mass: 0, shape: groundShape }); groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); groundBody.position.set(0, -4.5, 0); world.addBody(groundBody); }
-    function createGallows() { Object.values(gallows).forEach(mesh => { if (mesh && mesh.parent) mesh.parent.remove(mesh); }); gallows = { base: null, pole: null, beam: null, support: null, rope: null }; gallowsBodies.forEach(body => { if (body.world) world.remove(body); }); gallowsBodies = []; const baseGeo = new THREE.BoxGeometry(6, 0.8, 2); gallows.base = new THREE.Mesh(baseGeo, woodMaterial); gallows.base.position.y = -4.1; gallows.base.castShadow = !isMobile; gallows.base.receiveShadow = !isMobile; scene.add(gallows.base); const poleGeo = new THREE.BoxGeometry(0.8, 8, 0.8); gallows.pole = new THREE.Mesh(poleGeo, woodMaterial); gallows.pole.position.set(-2.5, 0, 0); gallows.pole.castShadow = !isMobile; gallows.pole.receiveShadow = !isMobile; scene.add(gallows.pole); const beamGeo = new THREE.BoxGeometry(4.5, 0.8, 0.8); gallows.beam = new THREE.Mesh(beamGeo, woodMaterial); gallows.beam.position.set(-0.25, 4.0, 0); gallows.beam.castShadow = !isMobile; gallows.beam.receiveShadow = !isMobile; scene.add(gallows.beam); const supportGeo = new THREE.BoxGeometry(3.5, 0.6, 0.6); gallows.support = new THREE.Mesh(supportGeo, woodMaterial); gallows.support.position.set(-1.5, 2.5, 0); gallows.support.rotation.z = Math.PI / 4; gallows.support.castShadow = !isMobile; gallows.support.receiveShadow = !isMobile; scene.add(gallows.support); const ropeGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.8, 8); gallows.rope = new THREE.Mesh(ropeGeo, ropeMaterial); gallows.rope.position.set(1.7, 3.1, 0); gallows.rope.castShadow = !isMobile; scene.add(gallows.rope); const addStaticBody = (shape, position, quaternion) => { const body = new CANNON.Body({ mass: 0, shape }); body.position.copy(position); if (quaternion) body.quaternion.copy(quaternion); world.addBody(body); gallowsBodies.push(body); }; addStaticBody(new CANNON.Box(new CANNON.Vec3(3, 0.4, 1)), gallows.base.position); addStaticBody(new CANNON.Box(new CANNON.Vec3(0.4, 4, 0.4)), gallows.pole.position); addStaticBody(new CANNON.Box(new CANNON.Vec3(2.25, 0.4, 0.4)), gallows.beam.position); }
-    function createHangmanParts() { hangmanParts.forEach(part => { if (part.mesh && part.mesh.parent) part.mesh.parent.remove(part.mesh); }); hangmanPhysicsBodies.forEach(item => { if (item.mesh && item.mesh.parent) item.mesh.parent.remove(item.mesh); if (item.body && item.body.world) world.remove(item.body); }); hangmanParts = []; hangmanPhysicsBodies = []; smileFaceGroup = null; grumpyFaceGroup = null; headMainSphere = null; const partsToCreate = HANGMAN_PART_COUNT[currentDifficulty]; const headBasePosition = new THREE.Vector3(1.7, 1.7, 0); smileFaceGroup = new THREE.Group(); smileFaceGroup.visible = false; grumpyFaceGroup = new THREE.Group(); grumpyFaceGroup.visible = false; const eyeRadius = 0.15; const eyeY = 0.1; const eyeZ = 0.48; const smileEyeGeo = new THREE.SphereGeometry(0.06, 12, 8); const smileLeftEye = new THREE.Mesh(smileEyeGeo, faceDetailMaterial); smileLeftEye.position.set(-eyeRadius, eyeY, eyeZ); smileFaceGroup.add(smileLeftEye); const smileRightEye = new THREE.Mesh(smileEyeGeo, faceDetailMaterial); smileRightEye.position.set(eyeRadius, eyeY, eyeZ); smileFaceGroup.add(smileRightEye); const smileGeo = new THREE.TorusGeometry(0.2, 0.03, 8, 16, Math.PI); const smileMouth = new THREE.Mesh(smileGeo, faceDetailMaterial); smileMouth.position.set(0, -0.15, eyeZ - 0.02); smileMouth.rotation.z = Math.PI; smileFaceGroup.add(smileMouth); const crossSize = 0.35; const crossThickness = 0.03; const eyeX = 0.20; const eyeYGrumpy = 0.1; const eyeZGrumpy = 0.45; const crossGeo = new THREE.CylinderGeometry(crossThickness, crossThickness, crossSize, 6); const l_eye1 = new THREE.Mesh(crossGeo, faceDetailMaterial); l_eye1.position.set(-eyeX, eyeYGrumpy, eyeZGrumpy); l_eye1.rotation.z = Math.PI / 4; grumpyFaceGroup.add(l_eye1); const l_eye2 = new THREE.Mesh(crossGeo, faceDetailMaterial); l_eye2.position.set(-eyeX, eyeYGrumpy, eyeZGrumpy); l_eye2.rotation.z = -Math.PI / 4; grumpyFaceGroup.add(l_eye2); const r_eye1 = new THREE.Mesh(crossGeo, faceDetailMaterial); r_eye1.position.set(eyeX, eyeYGrumpy, eyeZGrumpy); r_eye1.rotation.z = Math.PI / 4; grumpyFaceGroup.add(r_eye1); const r_eye2 = new THREE.Mesh(crossGeo, faceDetailMaterial); r_eye2.position.set(eyeX, eyeYGrumpy, eyeZGrumpy); r_eye2.rotation.z = -Math.PI / 4; grumpyFaceGroup.add(r_eye2); const grumpyMouthGeo = new THREE.BoxGeometry(0.4, 0.05, 0.05); const grumpyMouth = new THREE.Mesh(grumpyMouthGeo, faceDetailMaterial); grumpyMouth.position.set(0, -0.18, eyeZGrumpy + 0.03); grumpyFaceGroup.add(grumpyMouth); const partDefinitions = [ { name: "head", geo: new THREE.SphereGeometry(0.5, 24, 18), mat: skinMaterial, pos: [headBasePosition.x, headBasePosition.y, headBasePosition.z], physShape: new CANNON.Sphere(0.5), mass: 3 }, { name: "body", geo: new THREE.BoxGeometry(0.9, 1.4, 0.5), mat: blueMaterial, pos: [1.7, 0.5, 0], physShape: new CANNON.Box(new CANNON.Vec3(0.45, 0.7, 0.25)), mass: 6 }, { name: "l_arm", geo: new THREE.BoxGeometry(0.8, 0.3, 0.3), mat: blueMaterial, pos: [1.0, 0.9, 0], rot: [0, 0, 0.3], physShape: new CANNON.Box(new CANNON.Vec3(0.4, 0.15, 0.15)), mass: 1 }, { name: "r_arm", geo: new THREE.BoxGeometry(0.8, 0.3, 0.3), mat: blueMaterial, pos: [2.4, 0.9, 0], rot: [0, 0, -0.3], physShape: new CANNON.Box(new CANNON.Vec3(0.4, 0.15, 0.15)), mass: 1 }, { name: "l_leg", geo: new THREE.BoxGeometry(0.3, 0.9, 0.3), mat: blackMaterial, pos: [1.45, -0.4, 0], physShape: new CANNON.Box(new CANNON.Vec3(0.15, 0.45, 0.15)), mass: 2 }, { name: "r_leg", geo: new THREE.BoxGeometry(0.3, 0.9, 0.3), mat: blackMaterial, pos: [1.95, -0.4, 0], physShape: new CANNON.Box(new CANNON.Vec3(0.15, 0.45, 0.15)), mass: 2 }, { name: "l_foot", geo: new THREE.BoxGeometry(0.35, 0.2, 0.45), mat: blackMaterial, pos: [1.45, -0.9, 0.05], physShape: new CANNON.Box(new CANNON.Vec3(0.175, 0.1, 0.225)), mass: 0.5 }, { name: "r_foot", geo: new THREE.BoxGeometry(0.35, 0.2, 0.45), mat: blackMaterial, pos: [1.95, -0.9, 0.05], physShape: new CANNON.Box(new CANNON.Vec3(0.175, 0.1, 0.225)), mass: 0.5 }, { name: "hat", geo: new THREE.CylinderGeometry(0.3, 0.4, 0.3, 16), mat: blackMaterial, pos: [1.7, 2.25, 0], physShape: new CANNON.Cylinder(0.3, 0.4, 0.3, 8), mass: 0.5 } ]; for (let i = 0; i < partsToCreate; i++) { if (i >= partDefinitions.length) { hangmanParts.push({ mesh: null }); continue; } const def = partDefinitions[i]; if (!def) { hangmanParts.push({ mesh: null }); continue; } const mesh = new THREE.Mesh(def.geo, def.mat); mesh.position.set(...def.pos); if (def.rot) mesh.rotation.set(...def.rot); mesh.castShadow = !isMobile; mesh.visible = false; mesh.name = def.name; scene.add(mesh); let primaryVisualObject = mesh; let physicsBodyMesh = mesh; if (def.name === "head") { headMainSphere = mesh; mesh.add(smileFaceGroup); mesh.add(grumpyFaceGroup); } const body = new CANNON.Body({ mass: def.mass, shape: def.physShape, position: new CANNON.Vec3(...def.pos), linearDamping: 0.2, angularDamping: 0.2 }); if(def.rot) { const euler = new THREE.Euler(...def.rot, 'XYZ'); body.quaternion.setFromEuler(euler.x, euler.y, euler.z, 'XYZ'); } body.name = def.name; hangmanPhysicsBodies.push({ mesh: physicsBodyMesh, body: body }); hangmanParts.push({ mesh: primaryVisualObject }); } }
-    function renderGameState() { try { const statusEl = document.getElementById('status'); if (statusEl) statusEl.textContent = statusMessage; const sourceEl = document.getElementById('word-source'); if (sourceEl) sourceEl.textContent = wordSource ? `(Source: ${wordSource})` : ''; const wordDisplayEl = document.getElementById('word-display'); if (wordDisplayEl) { if (currentWord && currentWord !== "ERROR") { const display = currentWord.split('').map(letter => (guessedLetters.includes(letter) || gameOver) ? letter : '_').join(''); wordDisplayEl.textContent = display.split('').join(' '); } else if (currentWord === "ERROR") { wordDisplayEl.textContent = "E R R O R"; } else { wordDisplayEl.textContent = ""; } } const usedLettersEl = document.getElementById('used-letters'); if (usedLettersEl) { usedLettersEl.textContent = guessedLetters.sort().join(', '); } createLetterButtons(); } catch (uiError) { console.error("Error updating UI in renderGameState:", uiError); const statusEl = document.getElementById('status'); if (statusEl) statusEl.textContent = "UI Update Error!"; } }
-    async function startNewGame() { console.log(`--- Start New Game Invoked ---`); gameOver = false; wrongGuesses = 0; guessedLetters = []; currentDifficulty = document.getElementById('difficulty-select').value; maxWrongGuesses = HANGMAN_PART_COUNT[currentDifficulty]; currentWord = ""; wordSource = ""; statusMessage = `Starting new ${currentDifficulty} game...`; renderGameState(); try { hangmanPhysicsBodies.forEach(item => { if (item?.body?.world) world.remove(item.body); }); gallowsBodies.forEach(body => { if (body?.world) world.remove(body); }); hangmanPhysicsBodies = []; gallowsBodies = []; createGallows(); createHangmanParts(); } catch (resetError) { console.error("Error resetting scene/physics:", resetError); statusMessage = "Error resetting game visuals!"; wordSource = "(Error)"; currentWord = "ERROR"; gameOver = true; renderGameState(); if (!animationFrameId) animate(); return; } try { let word = null; let apiAttempted = false; statusMessage = `Choosing ${currentDifficulty} word...`; renderGameState(); if (useApiForWords && isApiWorking) { apiAttempted = true; const friendlyModelName = getFriendlyApiModelName(apiModel); statusMessage = `Getting ${currentDifficulty} word from ${friendlyModelName}...`; renderGameState(); word = await getWordFromApi(); if (word) { console.log("[startNewGame] API Success:", word); wordSource = 'AI'; } else { console.warn("[startNewGame] API failed or returned invalid/duplicate word after retries."); statusMessage = `AI failed. Using local ${currentDifficulty} word...`; wordSource = 'Local'; renderGameState(); } } if (!word) { if (!apiAttempted) { console.log(`[startNewGame] Using local ${currentDifficulty} word list.`); wordSource = 'Local'; statusMessage = `Using local ${currentDifficulty} word...`; renderGameState(); } else { console.log(`[startNewGame] Fell back to local ${currentDifficulty} word list.`); } const words = DEFAULT_WORDS[currentDifficulty]; if (!words || words.length === 0) throw new Error(`No local words for ${currentDifficulty}`); word = words[Math.floor(Math.random() * words.length)]; wordSource = 'Local'; console.log("[startNewGame] Selected local word:", word); } currentWord = word.toUpperCase(); statusMessage = `Guess a letter! ${maxWrongGuesses} guesses left.`; console.log(`[startNewGame] Final Word: "${currentWord}", Source: ${wordSource}`); } catch (error) { console.error("[startNewGame] CRITICAL error getting word or setting up:", error); statusMessage = `Error: ${error.message}. Try New Game.`; wordSource = '(Error)'; currentWord = "ERROR"; gameOver = true; } finally { renderGameState(); if (!animationFrameId) { console.log("[startNewGame] Restarting animation loop."); animate(); } console.log("--- End New Game ---"); } }
-    function createLetterButtons() { const container = document.getElementById('letters-container'); if (!container) return; container.innerHTML = ''; if (!currentWord || currentWord === "ERROR" || statusMessage.includes("Starting") || statusMessage.includes("Choosing") || statusMessage.includes("Getting")) { return; } for (let i = 65; i <= 90; i++) { const letter = String.fromCharCode(i); const button = document.createElement('button'); button.textContent = letter; button.className = 'letter-button'; button.dataset.letter = letter; const isGuessed = guessedLetters.includes(letter); button.disabled = gameOver || isGuessed; button.classList.toggle('disabled', button.disabled); if (isGuessed) { const correct = currentWord.includes(letter); button.classList.toggle('correct', correct); button.classList.toggle('incorrect', !correct); } button.addEventListener('click', () => handleGuess(letter)); container.appendChild(button); } }
-    function handleGuess(letter) { if (gameOver || guessedLetters.includes(letter) || !currentWord || currentWord === "ERROR") return; guessedLetters.push(letter); if (currentWord.includes(letter)) { statusMessage = `Correct! '${letter}' is in the word.`; checkWinCondition(); } else { wrongGuesses++; statusMessage = `Wrong! '${letter}' not found. ${maxWrongGuesses - wrongGuesses} guesses left.`; revealHangmanPart(); checkLossCondition(); } renderGameState(); }
-    function revealHangmanPart() { if (wrongGuesses <= 0 || wrongGuesses > hangmanParts.length) return; const partIndex = wrongGuesses - 1; const part = hangmanParts[partIndex]; if (part && part.mesh) { const partMesh = part.mesh; if (!partMesh.visible) { partMesh.visible = true; if (partIndex === 0 && smileFaceGroup) { smileFaceGroup.visible = true; if (grumpyFaceGroup) grumpyFaceGroup.visible = false; } const originalScale = partMesh.scale.clone(); partMesh.scale.set(1.3, 1.3, 1.3); let startTime = performance.now(); function scaleDown() { if (!partMesh || !partMesh.parent) return; const elapsed = performance.now() - startTime; const progress = Math.min(elapsed / 150, 1); const scale = 1.3 - 0.3 * progress; partMesh.scale.set(scale, scale, scale); if (progress < 1) { requestAnimationFrame(scaleDown); } else { partMesh.scale.copy(originalScale); } } requestAnimationFrame(scaleDown); } } else { console.warn("Attempted to reveal part index", partIndex, "- mesh missing?"); } if (currentDifficulty === 'hard' && wrongGuesses === maxWrongGuesses - FACE_CHANGE_GUESS_OFFSET) { if (smileFaceGroup && grumpyFaceGroup && headMainSphere && headMainSphere.visible) { smileFaceGroup.visible = false; grumpyFaceGroup.visible = true; } } }
-    function checkWinCondition() { if (!currentWord || gameOver) return; const allLettersGuessed = currentWord.split('').every(char => guessedLetters.includes(char)); if (allLettersGuessed) { statusMessage = `Congratulations! You guessed "${currentWord}"!`; gameOver = true; } }
-    function checkLossCondition() { if (gameOver) return; if (wrongGuesses >= maxWrongGuesses) { statusMessage = `Game Over! The word was "${currentWord}".`; gameOver = true; activateHangmanPhysics(); } }
-    function activateHangmanPhysics() { if (gallows.rope && gallows.rope.parent) { scene.remove(gallows.rope); gallows.rope = null; } console.log("--- Activating Physics ---"); if (!world) { console.error("Cannot activate physics, world not initialized."); return; } const tempWorldPos = new THREE.Vector3(); const tempWorldQuat = new THREE.Quaternion(); let physicsActivated = false; hangmanPhysicsBodies.forEach((item, index) => { if (!item?.body || !item?.mesh) return; const meshName = item.mesh.name || `mesh_${index}`; item.mesh.visible = true; item.mesh.traverse((child) => { if (child instanceof THREE.Mesh) { child.visible = true; } }); if (item.mesh === headMainSphere) { if (smileFaceGroup) smileFaceGroup.visible = (currentDifficulty !== 'hard'); if (grumpyFaceGroup) grumpyFaceGroup.visible = (currentDifficulty === 'hard'); } if (!item.body.world) { try { world.addBody(item.body); physicsActivated = true; } catch (addError) { console.error(`ERROR adding body ${meshName} to world:`, addError); } } }); if (!physicsActivated) { console.warn("No physics bodies added during activation."); return; } hangmanPhysicsBodies.forEach((item, index) => { if (!item?.body?.world || !item?.mesh) return; const meshName = item.mesh.name || `mesh_${index}`; item.body.velocity.set(0,0,0); item.body.angularVelocity.set(0,0,0); item.body.force.set(0,0,0); item.body.torque.set(0,0,0); try { item.mesh.getWorldPosition(tempWorldPos); item.body.position.set(tempWorldPos.x, tempWorldPos.y, tempWorldPos.z); item.mesh.getWorldQuaternion(tempWorldQuat); item.body.quaternion.set(tempWorldQuat.x, tempWorldQuat.y, tempWorldQuat.z, tempWorldQuat.w); } catch (syncError) { console.error(`Error syncing body ${meshName} transform:`, syncError); } const impulseStrength = 1.5; const randomVec = new CANNON.Vec3( (Math.random() - 0.5) * impulseStrength, (Math.random() - 0.8) * impulseStrength, (Math.random() - 0.5) * impulseStrength ); const worldPoint = item.body.position; item.body.applyImpulse(randomVec, worldPoint); item.body.angularVelocity.set( (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5 ); item.body.wakeUp(); }); console.log("--- Finished Activating Physics ---"); }
-    function getFriendlyApiModelName(modelId) { switch(modelId) { case 'gemini-1.5-flash': return 'Google Gemini Flash'; case 'openai': return 'OpenAI GPT-3.5'; case 'anthropic': return 'Anthropic Claude Haiku'; default: return modelId; } }
-    async function testAndSaveApiSettings() { apiKey = document.getElementById('api-key-input').value.trim(); apiModel = document.getElementById('api-model-select').value; const statusEl = document.getElementById('api-status'); const friendlyModelName = getFriendlyApiModelName(apiModel); if (!apiKey) { statusEl.textContent = 'Please enter an API key.'; statusEl.style.color = 'orange'; isApiWorking = false; updateApiStatusDisplay(); return; } statusEl.textContent = `Testing ${friendlyModelName}...`; statusEl.style.color = 'blue'; isApiWorking = false; try { const testPrompt = "Respond with only the word 'test'."; const result = await fetchFromApi(testPrompt); if (result && result.toLowerCase().includes('test')) { statusEl.textContent = `${friendlyModelName} connection successful! Key saved.`; statusEl.style.color = 'green'; isApiWorking = true; localStorage.setItem('hangmanApiKey', apiKey); localStorage.setItem('hangmanApiModel', apiModel); } else { throw new Error(`API test failed. Unexpected response: ${result || '(empty response)'}`); } } catch (error) { console.error('API test error:', error); statusEl.textContent = `Connection failed: ${error.message || 'Unknown error'}. Check key/model/network.`; statusEl.style.color = 'red'; isApiWorking = false; } updateApiStatusDisplay(); }
-    function updateApiStatusDisplay(overrideMessage = null) { const statusEl = document.getElementById('api-status'); if (!statusEl) return; const friendlyModelName = getFriendlyApiModelName(apiModel); if (overrideMessage) { statusEl.textContent = overrideMessage; if (overrideMessage.toLowerCase().includes("fail") || overrideMessage.toLowerCase().includes("error")) statusEl.style.color = 'red'; else if (overrideMessage.toLowerCase().includes("success") || overrideMessage.toLowerCase().includes("verified")) statusEl.style.color = 'green'; else if (overrideMessage.toLowerCase().includes("changed")) statusEl.style.color = 'orange'; else statusEl.style.color = 'blue'; return; } const keyEntered = !!apiKey; if (!keyEntered) { statusEl.textContent = 'Enter API key and click Test/Save.'; statusEl.style.color = '#555'; } else if (isApiWorking) { statusEl.textContent = `${friendlyModelName} connection verified. ${useApiForWords ? 'Using AI.' : 'API available.'}`; statusEl.style.color = 'green'; } else { statusEl.textContent = `Key entered for ${friendlyModelName}, but not verified. Click Test/Save.`; statusEl.style.color = 'orange'; } }
-    async function fetchFromApi(prompt) { if (!apiKey) throw new Error("API key is missing"); let apiEndpoint = '', requestData = {}, headers = { 'Content-Type': 'application/json' }; const friendlyModelName = getFriendlyApiModelName(apiModel); try { if (apiModel === 'gemini-1.5-flash') { apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`; requestData = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 30, temperature: 0.9, /* Slightly higher temp? */ topP: 0.95 } }; } else if (apiModel === 'openai') { apiEndpoint = 'https://api.openai.com/v1/chat/completions'; headers['Authorization'] = `Bearer ${apiKey}`; requestData = { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: prompt }], max_tokens: 20, temperature: 0.8 }; } else if (apiModel === 'anthropic') { apiEndpoint = 'https://api.anthropic.com/v1/messages'; headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = apiKey; requestData = { model: 'claude-3-haiku-20240307', max_tokens: 30, messages: [{ role: 'user', content: prompt }], temperature: 0.8 }; } else { throw new Error(`Unsupported API model: ${apiModel}`); } console.log(`[fetchFromApi] Sending request to ${friendlyModelName}`); const response = await fetch(apiEndpoint, { method: 'POST', headers: headers, body: JSON.stringify(requestData), signal: AbortSignal.timeout(15000) }); if (!response.ok) { let errorBody = `Status: ${response.status}`; try { const errorJson = await response.json(); errorBody = JSON.stringify(errorJson.error || errorJson); } catch (e) { try { errorBody = await response.text(); } catch (e2) {} } throw new Error(`API request failed. ${errorBody.substring(0, 200)}`); } const data = await response.json(); let responseText = ''; if (apiModel === 'gemini-1.5-flash') { responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''; } else if (apiModel === 'openai') { responseText = data.choices?.[0]?.message?.content || ''; } else if (apiModel === 'anthropic') { responseText = data.content?.find(block => block.type === 'text')?.text || ''; } return responseText.trim(); } catch (error) { console.error(`[fetchFromApi] API error for ${friendlyModelName}:`, error); throw error; } }
-    function onWindowResize() { if (!camera || !renderer) return; camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
-    function setupKeyboardControls() { document.addEventListener('keydown', (event) => { if (gameOver || event.ctrlKey || event.metaKey || event.altKey || !currentWord || currentWord==="ERROR") return; if (event.key.length === 1 && event.key.match(/[a-z]/i)) { const letter = event.key.toUpperCase(); const button = document.querySelector(`.letter-button[data-letter="${letter}"]`); if (button && !button.disabled) { handleGuess(letter); } } }); }
-    function animate() { animationFrameId = requestAnimationFrame(animate); const deltaTime = 1 / 60; try { if (world) world.step(deltaTime); if (gameOver && hangmanPhysicsBodies.length > 0 && hangmanPhysicsBodies[0]?.body?.world) { hangmanPhysicsBodies.forEach(item => { if (item?.body && item?.mesh) { try { item.mesh.position.copy(item.body.position); item.mesh.quaternion.copy(item.body.quaternion); } catch (syncError) { /* console.error("Error syncing mesh post-step:", syncError); */ } } }); } } catch (physicsError) { console.error("Physics step error:", physicsError); } if (controls) controls.update(); if (renderer && scene && camera) { renderer.render(scene, camera); } }
-
+        } // End of initHangmanGame function definition
     </script>
 </body>
 </html>
